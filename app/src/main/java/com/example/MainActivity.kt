@@ -118,6 +118,24 @@ fun FinanceTrackerApp() {
                     } else {
                         slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Right, animationSpec = tween(300))
                     }
+                },
+                popEnterTransition = {
+                    val initialIndex = getRouteIndex(initialState.destination.route)
+                    val targetIndex = getRouteIndex(targetState.destination.route)
+                    if (targetIndex > initialIndex) {
+                        slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Left, animationSpec = tween(300))
+                    } else {
+                        slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Right, animationSpec = tween(300))
+                    }
+                },
+                popExitTransition = {
+                    val initialIndex = getRouteIndex(initialState.destination.route)
+                    val targetIndex = getRouteIndex(targetState.destination.route)
+                    if (targetIndex > initialIndex) {
+                        slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Left, animationSpec = tween(300))
+                    } else {
+                        slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Right, animationSpec = tween(300))
+                    }
                 }
             ) {
                 composable("overview") { OverviewScreen(viewModel) }
