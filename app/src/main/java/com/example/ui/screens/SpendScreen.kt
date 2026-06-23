@@ -1,8 +1,10 @@
 package com.example.ui.screens
 
+import kotlinx.coroutines.delay
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -14,55 +16,66 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Backspace
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.StickyNote2
-import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.res.colorResource
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.content.ContextCompat
-import com.example.R
+import androidx.compose.material3.*
 import com.example.ui.components.*
 import com.example.ui.theme.*
 import com.example.viewmodel.FinanceViewModel
-// Giữ đúng 2 màu mà bản gốc đã dùng cho dấu +/-, định nghĩa cục bộ để không phụ thuộc
-// vào việc theme có sẵn IncomeGreen/SpendRed hay không.
+
+// Chỉ dùng màu riêng cho dấu +/- (income/spend), giữ y hệt bản gốc.
+// Mọi phần tử khác (pill, note, confirm...) giữ tone trắng/đen/xám trung tính, không đổi màu.
 private val AmountIncomeColor = Color(0xFF4CAF50)
 private val AmountSpendColor = Color.Red
+
+// Gợi ý note hiển thị dạng chip ngay khi ô note được chọn (giống Zalopay)
+private val NoteSuggestions = listOf(
+    "Thanh toán", "Ăn uống", "Mua hàng", "Hàng tháng", "Học phí",
+    "Hoá đơn", "Du lịch", "Đặt cọc", "Trả lương", "Trả nợ"
+)
 
 @Composable
 fun SpendScreen(viewModel: FinanceViewModel) {
     var amount by remember { mutableStateOf("0") }
     var isIncome by remember { mutableStateOf(false) }
     var note by remember { mutableStateOf("") }
-    var showNoteDialog by remember { mutableStateOf(false) }
+    var isNoteFocused by remember { mutableStateOf(false) }
 
-    // Màu chủ đạo đổi theo Income / Spend, dùng chung cho nhiều chỗ (số tiền, nút Confirm, note chip...)
-    // Dùng cùng 2 màu mà bản gốc đã dùng cho dấu +/- để không phụ thuộc vào màu chưa có trong theme.
-    val accentColor by animateColorAsState(
+    // Màu này CHỈ dùng cho dấu +/- — không áp dụng cho bất kỳ phần tử nào khác,
+    // để giữ đúng tone trắng/đen/xám trung tính của toàn màn hình.
+    val signColor by animateColorAsState(
         targetValue = if (isIncome) AmountIncomeColor else AmountSpendColor,
-        animationSpec = tween(durationMillis = 350),
-        label = "accentColor"
+        animationSpec = tween(durationMillis = 250),
+        label = "signColor"
     )
 
     Column(
@@ -74,7 +87,7 @@ fun SpendScreen(viewModel: FinanceViewModel) {
         TopAppBar(title = if (isIncome) "Income" else "Spend")
         Spacer(modifier = Modifier.height(24.dp))
 
-        // 1. Toggle Spend / Income — "viên thuốc" trượt mượt giữa 2 lựa chọn
+        // 1. Toggle Spend / Income — pill trượt mượt, vẫn tone trung tính (đen/trắng)
         SpendIncomeToggle(
             isIncome = isIncome,
             onToggle = { isIncome = it }
@@ -86,92 +99,51 @@ fun SpendScreen(viewModel: FinanceViewModel) {
         AmountEntry(
             amount = amount,
             isIncome = isIncome,
-            accentColor = accentColor
+            signColor = signColor
         )
+
 
         Spacer(modifier = Modifier.height(8.dp))
         Text("From Wallet", style = Typography.bodyLarge, color = TextSecondary)
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(20.dp))
 
-        // Note đã lưu hiện ngay dưới số tiền, dạng chip nhỏ, tap để sửa lại
-        AnimatedVisibility(
-            visible = note.isNotBlank(),
-            enter = fadeIn(tween(200)) + expandVertically(tween(200)),
-            exit = fadeOut(tween(150)) + shrinkVertically(tween(150))
+        // 3. Note — bấm vào là gõ luôn, kèm gợi ý chip phía dưới (giống Zalopay)
+        NoteField(
+            note = note,
+            onNoteChange = { note = it },
+            isFocused = isNoteFocused,
+            onFocusChange = { isNoteFocused = it }
+        )
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        // 4. Confirm — tone trung tính, không phụ thuộc accent color
+        val isConfirmEnabled = (amount.toDoubleOrNull() ?: 0.0) > 0.0
+        val confirmAlpha by animateFloatAsState(
+            targetValue = if (isConfirmEnabled) 1f else 0.4f,
+            animationSpec = tween(200),
+            label = "confirmAlpha"
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(52.dp)
+                .clip(RoundedCornerShape(26.dp))
+                .background(TextPrimary.copy(alpha = confirmAlpha))
+                .clickable(enabled = isConfirmEnabled) {
+                    val parsedAmount = amount.toDoubleOrNull() ?: 0.0
+                    if (parsedAmount > 0) {
+                        val finalNote = if (note.isNotBlank()) note else if (isIncome) "New Income" else "New Spend"
+                        viewModel.addTransaction(parsedAmount, finalNote, isIncome = isIncome)
+                        amount = "0"
+                        note = ""
+                        isNoteFocused = false
+                    }
+                },
+            contentAlignment = Alignment.Center
         ) {
-            Row(
-                modifier = Modifier
-                    .padding(top = 4.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(Color.LightGray.copy(alpha = 0.25f)) // ✅ nền xám nhẹ
-                    .clickable { showNoteDialog = true }
-                    .padding(horizontal = 14.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    Icons.Default.StickyNote2,
-                    contentDescription = null,
-                    tint = TextPrimary, // ✅ icon màu đen/xám đậm
-                    modifier = Modifier.size(14.dp)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = note,
-                    style = Typography.bodyMedium,
-                    color = TextPrimary,
-                    maxLines = 1
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(28.dp))
-
-        // 3. Actions
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            GlassCard(
-                modifier = Modifier
-                    .weight(1f)
-                    .height(48.dp)
-                    .clickable { showNoteDialog = true }
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxSize(),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(Icons.Default.Edit, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(if (note.isNotEmpty()) "Edit note" else "Add note", style = Typography.bodyLarge, color = TextSecondary)
-                }
-            }
-
-            val isConfirmEnabled = (amount.toDoubleOrNull() ?: 0.0) > 0.0
-            val confirmAlpha by animateFloatAsState(
-                targetValue = if (isConfirmEnabled) 1f else 0.4f,
-                animationSpec = tween(200),
-                label = "confirmAlpha"
-            )
-
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .height(48.dp)
-                    .clip(RoundedCornerShape(24.dp))
-                    .background(Color.Black.copy(alpha = confirmAlpha))
-                    .clickable(enabled = isConfirmEnabled) {
-                        val parsedAmount = amount.toDoubleOrNull() ?: 0.0
-                        if (parsedAmount > 0) {
-                            val finalNote = if (note.isNotBlank()) note else if (isIncome) "New Income" else "New Spend"
-                            viewModel.addTransaction(parsedAmount, finalNote, isIncome = isIncome)
-                            amount = "0"
-                            note = ""
-                        }
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                Text("Confirm", style = Typography.bodyLarge, color = Color.White)
-            }
+            Text("Confirm", style = Typography.bodyLarge, color = Color.White)
         }
 
         Spacer(modifier = Modifier.weight(1f))
@@ -179,9 +151,20 @@ fun SpendScreen(viewModel: FinanceViewModel) {
         // Numeric Keypad
         NumericKeypad(
             onNumber = { num ->
-                if (num == "." && amount.contains(".")) return@NumericKeypad
-                if (amount == "0" && num != ".") amount = num
-                else amount += num
+                when {
+                    // ✅ Xử lý riêng cho nút 000
+                    num == "000" -> {
+                        // Không cho thêm 000 nếu đã có dấu thập phân (5.5 + 000 = vô lý)
+                        if (amount.contains(".")) return@NumericKeypad
+                        if (amount == "0") amount = "000"
+                        else amount += "000"
+                    }
+                    // Các số bình thường
+                    else -> {
+                        if (amount == "0") amount = num
+                        else amount += num
+                    }
+                }
             },
             onDelete = {
                 if (amount.length > 1) amount = amount.dropLast(1) else amount = "0"
@@ -191,23 +174,6 @@ fun SpendScreen(viewModel: FinanceViewModel) {
             }
         )
         Spacer(modifier = Modifier.height(64.dp))
-    }
-
-    // 4. Popup Add Note
-    if (showNoteDialog) {
-        AddNoteDialog(
-            initialNote = note,
-            accentColor = Color.Black, // ✅ dialog dùng tông đen
-            onDismiss = { showNoteDialog = false },
-            onSave = { newNote ->
-                note = newNote
-                showNoteDialog = false
-            },
-            onClear = {
-                note = ""
-                showNoteDialog = false
-            }
-        )
     }
 }
 
@@ -240,15 +206,7 @@ private fun SpendIncomeToggle(
             ),
             label = "pillOffset"
         )
-
-        // ✅ Pill màu đen trung tính, không đổi theo Income/Spend
-        val pillColor by animateColorAsState(
-            targetValue = colorResource(id = R.color.black), // ✅ lấy từ colors.xml
-            animationSpec = tween(300),
-            label = "pillColor"
-        )
-
-        // Viên pill nền, trượt qua lại
+        // Pill nền màu đen trung tính (giữ tone đen/trắng), chỉ trượt vị trí, không đổi màu theo Income/Spend
         Box(
             modifier = Modifier
                 .offset(x = pillOffset)
@@ -256,7 +214,7 @@ private fun SpendIncomeToggle(
                 .fillMaxHeight()
                 .padding(4.dp)
                 .clip(RoundedCornerShape(20.dp))
-                .background(pillColor)
+                .background(TextPrimary)
         )
 
         Row(modifier = Modifier.fillMaxSize()) {
@@ -304,50 +262,73 @@ private fun ToggleLabel(text: String, selected: Boolean, modifier: Modifier = Mo
 
 /**
  * Khu vực hiển thị số tiền:
- * - Dấu +/- và "VND" cùng scale theo số tiền (đồng bộ tỉ lệ với phần số chính)
- * - Số tiền có animation trượt + mờ dần mượt khi gõ thêm/xóa từng ký tự
- * - Sau khi vượt 6 chữ số, cỡ chữ tiếp tục giảm dần theo mỗi chữ số thêm vào
- *   (áp dụng đồng thời cho số tiền và chữ "VND")
+ * - Dấu +/- là phần tử DUY NHẤT đổi màu theo Income/Spend; số tiền và "VND" luôn giữ tone đen/xám trung tính.
+ * - Khi gõ/xóa số, có animation "pop" nhẹ. Quan trọng: animation này chạy qua graphicsLayer (scaleX/scaleY),
+ *   KHÔNG animate trực tiếp fontSize. Animate TextUnit buộc Compose remeasure lại text mỗi frame (rất tốn),
+ *   đây chính là nguyên nhân lag khi spam — graphicsLayer chỉ ảnh hưởng render layer, không remeasure, nên mượt
+ *   ngay cả khi bấm số liên tục.
+ * - Sau khi vượt 6 chữ số, cỡ chữ giảm dần theo mỗi chữ số thêm vào, áp dụng đồng thời cho số tiền và "VND"
+ *   — phần scale-theo-độ-dài này cũng đi qua graphicsLayer, không animate fontSize gốc.
  */
 @Composable
 private fun AmountEntry(
     amount: String,
     isIncome: Boolean,
-    accentColor: Color
+    signColor: Color
 ) {
     val formatted = formatAmount(amount)
 
-    // Đếm số chữ số thực (bỏ dấu phẩy, dấu chấm) để tính tỉ lệ scale.
+    // Đếm số chữ số thực (bỏ dấu phẩy, dấu chấm) để tính tỉ lệ scale theo độ dài.
     val digitCount = amount.count { it.isDigit() }
 
-    // Cỡ chữ gốc cho phần số, tỉ lệ này dùng chung cho dấu +/- và "VND".
+    // Cỡ chữ CỐ ĐỊNH (không animate trực tiếp) — phần "scale theo độ dài" và "pop khi gõ"
+    // đều áp dụng bằng graphicsLayer scale, không đổi giá trị sp thật.
     val baseFontSize = 40.sp
     val minScale = 0.45f
 
     // Từ chữ số thứ 7 trở đi (>6 số), giảm dần 6% mỗi số thêm, có giới hạn dưới.
     val overflowDigits = (digitCount - 6).coerceAtLeast(0)
-    val targetScale = (1f - overflowDigits * 0.06f).coerceAtLeast(minScale)
+    val targetLengthScale = (1f - overflowDigits * 0.06f).coerceAtLeast(minScale)
 
-    val animatedScale by animateFloatAsState(
-        targetValue = targetScale,
-        animationSpec = tween(durationMillis = 200),
-        label = "amountScale"
+    // Scale theo độ dài số (rẻ: chỉ ảnh hưởng layer, không remeasure)
+    val lengthScale by animateFloatAsState(
+        targetValue = targetLengthScale,
+        animationSpec = tween(durationMillis = 180),
+        label = "amountLengthScale"
     )
 
-    val signFontSize = baseFontSize * animatedScale
-    val amountFontSize = baseFontSize * animatedScale
-    val vndFontSize = (baseFontSize * 0.55f) * animatedScale
+    // "Pop" nhẹ mỗi khi số tiền thay đổi — dùng Animatable + graphicsLayer (không AnimatedContent,
+    // không animate fontSize), nên khi user spam bấm số/xóa liên tục, animation chỉ retarget giá trị
+    // hiện có trên layer, không gây đo lại layout → không giật.
+    val popScale = remember { Animatable(1f) }
+    LaunchedEffect(formatted) {
+        popScale.snapTo(0.95f)
+        popScale.animateTo(
+            targetValue = 1f,
+            animationSpec = tween(durationMillis = 140)
+        )
+    }
+
+    // Tổng hợp 2 hiệu ứng scale lại thành 1 giá trị duy nhất áp lên graphicsLayer
+    val combinedScale = lengthScale * popScale.value
 
     BoxWithConstraints(
         modifier = Modifier.fillMaxWidth(),
         contentAlignment = Alignment.Center
     ) {
         Row(
-            modifier = Modifier.widthIn(max = maxWidth),
+            modifier = Modifier
+                .widthIn(max = maxWidth)
+                .graphicsLayer {
+                    scaleX = combinedScale
+                    scaleY = combinedScale
+                },
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Dấu +/- chuyển mượt theo Income/Spend (scale + fade)
+            // Dấu +/- — phần tử duy nhất mang màu accent, đổi mượt theo Income/Spend.
+            // Toggle Income/Spend không bị spam (chỉ 2 trạng thái, người dùng không bấm liên tục),
+            // nên AnimatedContent ở đây an toàn, không phải nguồn lag.
             AnimatedContent(
                 targetState = isIncome,
                 transitionSpec = {
@@ -358,43 +339,30 @@ private fun AmountEntry(
             ) { income ->
                 Text(
                     text = if (income) "+" else "-",
-                    fontSize = signFontSize,
+                    fontSize = baseFontSize,
                     style = Typography.displayLarge,
-                    color = accentColor
+                    color = signColor
                 )
             }
 
             Spacer(modifier = Modifier.width(4.dp))
 
-            // Số tiền: mỗi lần thay đổi (gõ/xóa) trượt + mờ dần theo chiều tăng/giảm độ dài
-            AnimatedContent(
-                targetState = formatted,
-                transitionSpec = {
-                    val growing = targetState.length >= initialState.length
-                    (slideInVertically(animationSpec = tween(180)) { h -> if (growing) h / 3 else -h / 3 } +
-                            fadeIn(tween(180))) togetherWith
-                            (slideOutVertically(animationSpec = tween(150)) { h -> if (growing) -h / 3 else h / 3 } +
-                                    fadeOut(tween(120)))
-                },
-                label = "amountSwitch"
-            ) { text ->
-                Text(
-                    text = text,
-                    fontSize = amountFontSize,
-                    lineHeight = amountFontSize,
-                    style = Typography.displayLarge,
-                    color = TextPrimary,
-                    maxLines = 1,
-                    softWrap = false
-                )
-            }
+            Text(
+                text = formatted,
+                fontSize = baseFontSize,
+                lineHeight = baseFontSize,
+                style = Typography.displayLarge,
+                color = TextPrimary,
+                maxLines = 1,
+                softWrap = false
+            )
 
             Spacer(modifier = Modifier.width(8.dp))
 
             Text(
                 text = "VND",
-                fontSize = vndFontSize,
-                lineHeight = vndFontSize,
+                fontSize = baseFontSize * 0.55f,
+                lineHeight = baseFontSize * 0.55f,
                 style = Typography.displayLarge,
                 color = TextSecondary
             )
@@ -403,68 +371,126 @@ private fun AmountEntry(
 }
 
 /**
- * Popup Add Note thiết kế lại: bo góc lớn hơn, icon, character counter, vai trò nút rõ ràng hơn.
+ * Note dạng đường kẻ đứt (dashed divider) — giống đúng ảnh mẫu Zalopay: không có ô/khung bo viền,
+ * chỉ là 1 dòng kẻ đứt mỏng. Bấm vào dòng đó để focus và gõ trực tiếp lên trên đường kẻ.
+ * Khi đang focus, các chip gợi ý hiện ra ngay dưới, xếp wrap nhiều dòng (không cuộn ngang).
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun AddNoteDialog(
-    initialNote: String,
-    accentColor: Color,
-    onDismiss: () -> Unit,
-    onSave: (String) -> Unit,
-    onClear: () -> Unit
+private fun NoteField(
+    note: String,
+    onNoteChange: (String) -> Unit,
+    isFocused: Boolean,
+    onFocusChange: (Boolean) -> Unit
 ) {
-    var noteText by remember { mutableStateOf(initialNote) }
+    val focusManager = LocalFocusManager.current
+    val focusRequester = remember { FocusRequester() }
     val maxLength = 60
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        shape = RoundedCornerShape(24.dp),
-        title = {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.Edit, contentDescription = null, tint = accentColor, modifier = Modifier.size(20.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Add a note", style = Typography.bodyLarge, fontWeight = FontWeight.SemiBold)
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        // Text gõ trực tiếp, không icon, không khung — chỉ căn giữa phía trên đường kẻ đứt
+        BasicTextField(
+            value = note,
+            onValueChange = { if (it.length <= maxLength) onNoteChange(it) },
+            modifier = Modifier
+                .widthIn(min = 80.dp)
+                .focusRequester(focusRequester)
+                .onFocusChanged { onFocusChange(it.isFocused) },
+            singleLine = true,
+            textStyle = Typography.bodyLarge.copy(color = TextPrimary, textAlign = TextAlign.Center),
+            cursorBrush = SolidColor(TextPrimary),
+            decorationBox = { innerTextField ->
+                Box(contentAlignment = Alignment.Center) {
+                    if (note.isEmpty()) {
+                        Text("Add a note", style = Typography.bodyLarge, color = TextSecondary)
+                    }
+                    innerTextField()
+                }
             }
-        },
-        text = {
-            Column {
-                OutlinedTextField(
-                    value = noteText,
-                    onValueChange = { if (it.length <= maxLength) noteText = it },
-                    placeholder = { Text("What's this for?") },
-                    singleLine = true,
-                    shape = RoundedCornerShape(16.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = accentColor,
-                        cursorColor = accentColor
-                    ),
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "${noteText.length}/$maxLength",
-                    style = Typography.bodyMedium,
-                    color = TextSecondary,
-                    modifier = Modifier.align(Alignment.End)
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = { onSave(noteText.trim()) }) {
-                Text("Save", color = accentColor, fontWeight = FontWeight.SemiBold)
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onClear) {
-                Text("Clear", color = TextSecondary)
+        )
+
+        Spacer(modifier = Modifier.height(6.dp))
+
+        // Đường kẻ đứt mỏng — bấm vào đây cũng mở bàn phím để gõ note, giống tap vào divider trong ảnh mẫu
+        DashedDivider(
+            modifier = Modifier
+                .width(220.dp)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null
+                ) { focusRequester.requestFocus() }
+        )
+
+        // Gợi ý hiện ngay khi note đang focus, ẩn mượt khi rời focus — wrap nhiều dòng giống ảnh mẫu
+        AnimatedVisibility(
+            visible = isFocused,
+            enter = fadeIn(tween(150)) + expandVertically(tween(150)),
+            exit = fadeOut(tween(120)) + shrinkVertically(tween(120))
+        ) {
+            FlowRow(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                NoteSuggestions.forEach { suggestion ->
+                    NoteSuggestionChip(
+                        text = suggestion,
+                        onClick = {
+                            onNoteChange(suggestion)
+                            focusManager.clearFocus()
+                        }
+                    )
+                }
             }
         }
-    )
+    }
 }
+
+/**
+ * Đường kẻ đứt mỏng vẽ bằng Canvas — đúng kiểu "- - - - -" trong ảnh mẫu, tone xám trung tính.
+ */
+@Composable
+private fun DashedDivider(modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier.height(1.dp)) {
+        val dashPx = 6.dp.toPx()
+        val gapPx = 5.dp.toPx()
+        var x = 0f
+        while (x < size.width) {
+            drawLine(
+                color = TextSecondary.copy(alpha = 0.5f),
+                start = Offset(x, 0f),
+                end = Offset((x + dashPx).coerceAtMost(size.width), 0f),
+                strokeWidth = 2.dp.toPx()
+            )
+            x += dashPx + gapPx
+        }
+    }
+}
+
+@Composable
+private fun NoteSuggestionChip(text: String, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(18.dp))
+            .background(TextSecondary.copy(alpha = 0.08f))
+            .clickable { onClick() }
+            .padding(horizontal = 16.dp, vertical = 9.dp)
+    ) {
+        Text(text, style = Typography.bodyMedium, color = TextPrimary)
+    }
+}
+
 
 private fun formatAmount(rawAmount: String): String {
     if (rawAmount.isEmpty() || rawAmount == "0") return "0"
-    val parts = rawAmount.split(".")
+    // ✅ Loại bỏ leading zeros nhưng giữ lại ít nhất 1 chữ số
+    val normalized = rawAmount.trimStart('0').ifEmpty { "0" }
+    val parts = normalized.split(".")
     val intPart = parts[0]
     val decPart = if (parts.size > 1) ".${parts[1]}" else ""
     val formattedInt = intPart.reversed().chunked(3).joinToString(",").reversed()
@@ -485,7 +511,7 @@ fun NumericKeypad(
         listOf("1", "2", "3"),
         listOf("4", "5", "6"),
         listOf("7", "8", "9"),
-        listOf(".", "0", "delete")
+        listOf("000", "0", "delete")   // ✅ đổi "." thành "000"
     )
     Column(modifier = Modifier.fillMaxWidth()) {
         keys.forEach { row ->
@@ -494,10 +520,10 @@ fun NumericKeypad(
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
                 row.forEach { key ->
-                    if (key == "delete") {
-                        DeleteKey(onDelete = onDelete, onDeleteAll = onDeleteAll)
-                    } else {
-                        KeypadKey(key = key, onClick = { onNumber(key) })
+                    when (key) {
+                        "delete" -> DeleteKey(onDelete = onDelete, onDeleteAll = onDeleteAll)
+                        "000"    -> TripleZeroKey(onClick = { onNumber(key) })  // ✅ nút riêng cho đẹp
+                        else     -> KeypadKey(key = key, onClick = { onNumber(key) })
                     }
                 }
             }
@@ -505,7 +531,32 @@ fun NumericKeypad(
         }
     }
 }
-
+@Composable
+private fun TripleZeroKey(onClick: () -> Unit) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val pressScale by animateFloatAsState(
+        targetValue = if (isPressed) 0.88f else 1f,
+        animationSpec = spring(stiffness = Spring.StiffnessHigh),
+        label = "tripleZeroScale"
+    )
+    Box(
+        modifier = Modifier
+            .size(64.dp)
+            .scale(pressScale)
+            .clip(RoundedCornerShape(16.dp))
+            .clickable(interactionSource = interactionSource, indication = null) { onClick() },
+        contentAlignment = Alignment.Center
+    ) {
+        // ✅ Dùng fontSize nhỏ hơn để "000" vừa vặn trong nút
+        Text(
+            text = "000",
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Medium,
+            color = TextPrimary
+        )
+    }
+}
 @Composable
 private fun KeypadKey(key: String, onClick: () -> Unit) {
     val interactionSource = remember { MutableInteractionSource() }
