@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import android.annotation.SuppressLint
 import kotlinx.coroutines.delay
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
@@ -183,6 +184,7 @@ fun SpendScreen(viewModel: FinanceViewModel) {
  * Toggle Spend / Income dạng "viên thuốc" (pill) trượt mượt theo lựa chọn (spring bouncy),
  * thay cho việc chỉ đổi background tĩnh như bản cũ.
  */
+@SuppressLint("UnusedBoxWithConstraintsScope")
 @Composable
 private fun SpendIncomeToggle(
     isIncome: Boolean,
@@ -270,6 +272,7 @@ private fun ToggleLabel(text: String, selected: Boolean, modifier: Modifier = Mo
  * - Sau khi vượt 6 chữ số, cỡ chữ giảm dần theo mỗi chữ số thêm vào, áp dụng đồng thời cho số tiền và "VND"
  *   — phần scale-theo-độ-dài này cũng đi qua graphicsLayer, không animate fontSize gốc.
  */
+@SuppressLint("UnusedBoxWithConstraintsScope")
 @Composable
 private fun AmountEntry(
     amount: String,
