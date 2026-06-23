@@ -52,6 +52,7 @@ import androidx.compose.material3.*
 import com.example.ui.components.*
 import com.example.ui.theme.*
 import com.example.viewmodel.FinanceViewModel
+import kotlinx.coroutines.launch
 
 // Chỉ dùng màu riêng cho dấu +/- (income/spend), giữ y hệt bản gốc.
 // Mọi phần tử khác (pill, note, confirm...) giữ tone trắng/đen/xám trung tính, không đổi màu.
@@ -70,6 +71,9 @@ fun SpendScreen(viewModel: FinanceViewModel) {
     var isIncome by remember { mutableStateOf(false) }
     var note by remember { mutableStateOf("") }
     var isNoteFocused by remember { mutableStateOf(false) }
+
+    val coroutineScope = rememberCoroutineScope()
+    val shakeOffset = remember { Animatable(0f) }
 
     // Màu này CHỈ dùng cho dấu +/- — không áp dụng cho bất kỳ phần tử nào khác,
     // để giữ đúng tone trắng/đen/xám trung tính của toàn màn hình.
@@ -97,11 +101,13 @@ fun SpendScreen(viewModel: FinanceViewModel) {
         Spacer(modifier = Modifier.height(40.dp))
 
         // 2. Amount Entry — căn giữa, scale đồng bộ giữa số tiền và "VND"
-        AmountEntry(
-            amount = amount,
-            isIncome = isIncome,
-            signColor = signColor
-        )
+        Box(modifier = Modifier.offset(x = shakeOffset.value.dp)) {
+            AmountEntry(
+                amount = amount,
+                isIncome = isIncome,
+                signColor = signColor
+            )
+        }
 
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -152,6 +158,22 @@ fun SpendScreen(viewModel: FinanceViewModel) {
         // Numeric Keypad
         NumericKeypad(
             onNumber = { num ->
+                val currentDigits = if (amount == "0") 0 else amount.count { it.isDigit() }
+                val newDigits = num.count { it.isDigit() }
+                if (currentDigits + newDigits > 15) {
+                    coroutineScope.launch {
+                        // Rung biên độ nhỏ (4f-6f), tần suất cực nhanh (15ms)
+                        repeat(5) {
+                            shakeOffset.animateTo(4f, animationSpec = tween(15))
+                            shakeOffset.animateTo(-6f, animationSpec = tween(15))
+                            shakeOffset.animateTo(6f, animationSpec = tween(15))
+                            shakeOffset.animateTo(-4f, animationSpec = tween(15))
+                        }
+                        shakeOffset.animateTo(0f, animationSpec = tween(15))
+                    }
+                    return@NumericKeypad
+                }
+
                 when {
                     // ✅ Xử lý riêng cho nút 000
                     num == "000" -> {
