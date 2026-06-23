@@ -1,0 +1,6 @@
+{
+  "name": "Glass Finance",
+  "description": "A glassmorphism-styled personal finance tracker representing balances in VND.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
