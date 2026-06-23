@@ -36,9 +36,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
+import com.example.R
 import com.example.ui.components.*
 import com.example.ui.theme.*
 import com.example.viewmodel.FinanceViewModel
@@ -101,7 +104,7 @@ fun SpendScreen(viewModel: FinanceViewModel) {
                 modifier = Modifier
                     .padding(top = 4.dp)
                     .clip(RoundedCornerShape(16.dp))
-                    .background(accentColor.copy(alpha = 0.10f))
+                    .background(Color.LightGray.copy(alpha = 0.25f)) // ✅ nền xám nhẹ
                     .clickable { showNoteDialog = true }
                     .padding(horizontal = 14.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -109,7 +112,7 @@ fun SpendScreen(viewModel: FinanceViewModel) {
                 Icon(
                     Icons.Default.StickyNote2,
                     contentDescription = null,
-                    tint = accentColor,
+                    tint = TextPrimary, // ✅ icon màu đen/xám đậm
                     modifier = Modifier.size(14.dp)
                 )
                 Spacer(modifier = Modifier.width(6.dp))
@@ -155,7 +158,7 @@ fun SpendScreen(viewModel: FinanceViewModel) {
                     .weight(1f)
                     .height(48.dp)
                     .clip(RoundedCornerShape(24.dp))
-                    .background(accentColor.copy(alpha = confirmAlpha))
+                    .background(Color.Black.copy(alpha = confirmAlpha))
                     .clickable(enabled = isConfirmEnabled) {
                         val parsedAmount = amount.toDoubleOrNull() ?: 0.0
                         if (parsedAmount > 0) {
@@ -194,7 +197,7 @@ fun SpendScreen(viewModel: FinanceViewModel) {
     if (showNoteDialog) {
         AddNoteDialog(
             initialNote = note,
-            accentColor = accentColor,
+            accentColor = Color.Black, // ✅ dialog dùng tông đen
             onDismiss = { showNoteDialog = false },
             onSave = { newNote ->
                 note = newNote
@@ -237,8 +240,10 @@ private fun SpendIncomeToggle(
             ),
             label = "pillOffset"
         )
+
+        // ✅ Pill màu đen trung tính, không đổi theo Income/Spend
         val pillColor by animateColorAsState(
-            targetValue = if (isIncome) AmountIncomeColor else AmountSpendColor,
+            targetValue = colorResource(id = R.color.black), // ✅ lấy từ colors.xml
             animationSpec = tween(300),
             label = "pillColor"
         )
