@@ -336,7 +336,7 @@ private fun DebtCard(
                         color = TextSecondary
                     )
                     Text(
-                        text = "₫ ${fmt.format(item.debt.originalAmount)}",
+                        text = "VND ${fmt.format(item.debt.originalAmount)}",
                         style = MaterialTheme.typography.bodyLarge,
                         fontWeight = FontWeight.SemiBold,
                         color = TextPrimary

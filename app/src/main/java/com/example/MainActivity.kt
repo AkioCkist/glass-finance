@@ -61,7 +61,7 @@ fun FinanceTrackerApp() {
     )
 
     // Debt repositories
-    val debtRepository = remember { DebtRepository(database.debtDao(), database.debtTransactionDao()) }
+    val debtRepository = remember { DebtRepository(database.debtDao(), database.debtTransactionDao(), database.transactionDao()) }
     val personRepository = remember { DebtPersonRepository(database.debtPersonDao()) }
 
     // Debt ViewModels
@@ -246,6 +246,7 @@ fun DebtAddScreen(
 ) {
     var isLoading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    val coroutineScope = rememberCoroutineScope()
 
     DebtFormScreen(
         personId = persons.firstOrNull()?.id,
@@ -260,7 +261,7 @@ fun DebtAddScreen(
         error = error,
         onSave = { personId, title, note, amount, dueDate, direction ->
             isLoading = true
-            kotlinx.coroutines.GlobalScope.launch {
+            coroutineScope.launch {
                 val result = repository.createDebt(
                     personId = personId,
                     title = title,
@@ -280,7 +281,7 @@ fun DebtAddScreen(
         },
         onNavigateBack = onNavigateBack,
         onAddPerson = { name ->
-            kotlinx.coroutines.GlobalScope.launch {
+            coroutineScope.launch {
                 personRepository.addPerson(name)
             }
         }
@@ -300,6 +301,7 @@ fun DebtEditScreen(
     var isLoading by remember { mutableStateOf(true) }
     var isSaving by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    val coroutineScope = rememberCoroutineScope()
 
     LaunchedEffect(debtId) {
         isLoading = true
@@ -332,7 +334,7 @@ fun DebtEditScreen(
         error = error,
         onSave = { personId, title, note, _, dueDate, direction ->
             isSaving = true
-            kotlinx.coroutines.GlobalScope.launch {
+            coroutineScope.launch {
                 val result = repository.updateDebt(
                     debtId = debtId,
                     personId = personId,
@@ -351,7 +353,7 @@ fun DebtEditScreen(
         },
         onNavigateBack = onNavigateBack,
         onAddPerson = { name ->
-            kotlinx.coroutines.GlobalScope.launch {
+            coroutineScope.launch {
                 personRepository.addPerson(name)
             }
         }

@@ -493,133 +493,13 @@ private fun NoteSuggestionChip(text: String, onClick: () -> Unit) {
     }
 }
 
-
+// Format giữ nguyên decimal part (không bỏ như SharedComponents.formatAmountWithCommas)
 private fun formatAmount(rawAmount: String): String {
     if (rawAmount.isEmpty() || rawAmount == "0") return "0"
-    // ✅ Loại bỏ leading zeros nhưng giữ lại ít nhất 1 chữ số
     val normalized = rawAmount.trimStart('0').ifEmpty { "0" }
     val parts = normalized.split(".")
     val intPart = parts[0]
     val decPart = if (parts.size > 1) ".${parts[1]}" else ""
     val formattedInt = intPart.reversed().chunked(3).joinToString(",").reversed()
     return formattedInt + decPart
-}
-
-/**
- * Bàn phím số.
- * Nút xóa: bấm thường = xóa 1 ký tự, giữ (long-press) = xóa toàn bộ số đã gõ.
- */
-@Composable
-fun NumericKeypad(
-    onNumber: (String) -> Unit,
-    onDelete: () -> Unit,
-    onDeleteAll: () -> Unit
-) {
-    val keys = listOf(
-        listOf("1", "2", "3"),
-        listOf("4", "5", "6"),
-        listOf("7", "8", "9"),
-        listOf("000", "0", "delete")   // ✅ đổi "." thành "000"
-    )
-    Column(modifier = Modifier.fillMaxWidth()) {
-        keys.forEach { row ->
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly
-            ) {
-                row.forEach { key ->
-                    when (key) {
-                        "delete" -> DeleteKey(onDelete = onDelete, onDeleteAll = onDeleteAll)
-                        "000"    -> TripleZeroKey(onClick = { onNumber(key) })  // ✅ nút riêng cho đẹp
-                        else     -> KeypadKey(key = key, onClick = { onNumber(key) })
-                    }
-                }
-            }
-            Spacer(modifier = Modifier.height(16.dp))
-        }
-    }
-}
-@Composable
-private fun TripleZeroKey(onClick: () -> Unit) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val pressScale by animateFloatAsState(
-        targetValue = if (isPressed) 0.88f else 1f,
-        animationSpec = spring(stiffness = Spring.StiffnessHigh),
-        label = "tripleZeroScale"
-    )
-    Box(
-        modifier = Modifier
-            .size(64.dp)
-            .scale(pressScale)
-            .clip(RoundedCornerShape(16.dp))
-            .clickable(interactionSource = interactionSource, indication = null) { onClick() },
-        contentAlignment = Alignment.Center
-    ) {
-        // ✅ Dùng fontSize nhỏ hơn để "000" vừa vặn trong nút
-        Text(
-            text = "000",
-            fontSize = 18.sp,
-            fontWeight = FontWeight.Medium,
-            color = TextPrimary
-        )
-    }
-}
-@Composable
-private fun KeypadKey(key: String, onClick: () -> Unit) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val pressScale by animateFloatAsState(
-        targetValue = if (isPressed) 0.88f else 1f,
-        animationSpec = spring(stiffness = Spring.StiffnessHigh),
-        label = "keyScale"
-    )
-    Box(
-        modifier = Modifier
-            .size(64.dp)
-            .scale(pressScale)
-            .clip(RoundedCornerShape(16.dp))
-            .clickable(interactionSource = interactionSource, indication = null) { onClick() },
-        contentAlignment = Alignment.Center
-    ) {
-        Text(key, style = Typography.headlineMedium, color = TextPrimary)
-    }
-}
-
-/**
- * Nút xóa: tap = xóa 1 số, giữ (long-press) = xóa toàn bộ ngay lập tức,
- * sau đó tiếp tục giữ sẽ không gây lỗi gì thêm vì amount đã về "0".
- */
-@Composable
-private fun DeleteKey(onDelete: () -> Unit, onDeleteAll: () -> Unit) {
-    var isPressed by remember { mutableStateOf(false) }
-    val pressScale by animateFloatAsState(
-        targetValue = if (isPressed) 0.88f else 1f,
-        animationSpec = spring(stiffness = Spring.StiffnessHigh),
-        label = "deleteKeyScale"
-    )
-
-    Box(
-        modifier = Modifier
-            .size(64.dp)
-            .scale(pressScale)
-            .clip(RoundedCornerShape(16.dp))
-            .pointerInput(onDelete, onDeleteAll) {
-                detectTapGestures(
-                    onPress = {
-                        isPressed = true
-                        try {
-                            awaitRelease()
-                        } finally {
-                            isPressed = false
-                        }
-                    },
-                    onTap = { onDelete() },
-                    onLongPress = { onDeleteAll() }
-                )
-            },
-        contentAlignment = Alignment.Center
-    ) {
-        Icon(Icons.Default.Backspace, contentDescription = "Delete", tint = TextPrimary)
-    }
 }

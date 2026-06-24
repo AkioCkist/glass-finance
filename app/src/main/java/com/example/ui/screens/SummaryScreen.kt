@@ -233,7 +233,7 @@ private fun StatCard(modifier: Modifier = Modifier, label: String, value: String
                 Text(label, style = Typography.labelMedium, color = TextSecondary)
             }
             Text(
-                text = "₫ $value",
+                text = "VND $value",
                 style = Typography.bodyLarge,
                 fontWeight = FontWeight.Bold,
                 color = if (isIncome) GainGreen else ExpenseRed,

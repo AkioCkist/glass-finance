@@ -1,8 +1,14 @@
 package com.example.ui.components
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.Spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -17,13 +23,21 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import com.example.data.DebtDirection
 import com.example.ui.theme.*
 
@@ -69,7 +83,7 @@ fun BalanceSection(title: String, value: String, color: Color = TextPrimary) {
         Spacer(modifier = Modifier.height(8.dp))
         Row(verticalAlignment = Alignment.Bottom) {
             Text(
-                text = "₫ ",
+                text = "VND ",
                 style = Typography.displayMedium,
                 color = TextSecondary
             )
@@ -164,11 +178,11 @@ fun BentoGridSection() {
         horizontalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            BentoCard(title = "Cash", amount = "₫ 1.2M", icon = Icons.Default.AccountBalanceWallet)
-            BentoCard(title = "Earnings", amount = "₫ 500K", icon = Icons.Default.TrendingUp)
+            BentoCard(title = "Cash", amount = "VND 1.2M", icon = Icons.Default.AccountBalanceWallet)
+            BentoCard(title = "Earnings", amount = "VND 500K", icon = Icons.Default.TrendingUp)
         }
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            BentoCard(title = "Investments", amount = "₫ 8.5M", icon = Icons.Default.PieChart)
+            BentoCard(title = "Investments", amount = "VND 8.5M", icon = Icons.Default.PieChart)
             GlassCard(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -298,8 +312,8 @@ fun FloatingBottomNav(
 @Composable
 fun DirectionLabel(direction: DebtDirection) {
     val (bg, fg, label) = when (direction) {
-        DebtDirection.OWED_TO_ME -> Triple(GainGreen.copy(alpha = 0.1f), GainGreen, "Owed to me")
-        DebtDirection.I_OWE -> Triple(SecondaryVibrant.copy(alpha = 0.1f), SecondaryVibrant, "I owe")
+        DebtDirection.OWED_TO_ME -> Triple(GainGreen.copy(alpha = 0.1f), GainGreen, "They owe me")
+        DebtDirection.I_OWE -> Triple(SecondaryVibrant.copy(alpha = 0.1f), SecondaryVibrant, "I owe them")
     }
     Box(
         modifier = Modifier
@@ -331,5 +345,230 @@ fun NavIcon(icon: ImageVector, isActive: Boolean, onClick: () -> Unit) {
             contentDescription = null,
             tint = if (isActive) Color.White else TextSecondary
         )
+    }
+}
+
+// ── Numeric Keypad Components ─────────────────────────────────────────────────
+
+/**
+ * Format số tiền với dấu phẩy sau mỗi 3 số (VD: 100,000,000)
+ */
+fun formatAmountWithCommas(rawAmount: String): String {
+    if (rawAmount.isEmpty() || rawAmount == "0") return "0"
+    val normalized = rawAmount.trimStart('0').ifEmpty { "0" }
+    return normalized.reversed().chunked(3).joinToString(",").reversed()
+}
+
+/**
+ * Bàn phím số dùng chung.
+ * Nút xóa: bấm thường = xóa 1 ký tự, giữ (long-press) = xóa toàn bộ số đã gõ.
+ */
+@Composable
+fun NumericKeypad(
+    onNumber: (String) -> Unit,
+    onDelete: () -> Unit,
+    onDeleteAll: () -> Unit
+) {
+    val keys = listOf(
+        listOf("1", "2", "3"),
+        listOf("4", "5", "6"),
+        listOf("7", "8", "9"),
+        listOf("000", "0", "delete")
+    )
+    Column(modifier = Modifier.fillMaxWidth()) {
+        keys.forEach { row ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                row.forEach { key ->
+                    when (key) {
+                        "delete" -> DeleteKey(onDelete = onDelete, onDeleteAll = onDeleteAll)
+                        "000"    -> TripleZeroKey(onClick = { onNumber(key) })
+                        else     -> KeypadKey(key = key, onClick = { onNumber(key) })
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+    }
+}
+
+@Composable
+private fun TripleZeroKey(onClick: () -> Unit) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val pressScale by animateFloatAsState(
+        targetValue = if (isPressed) 0.88f else 1f,
+        animationSpec = spring(stiffness = Spring.StiffnessHigh),
+        label = "tripleZeroScale"
+    )
+    Box(
+        modifier = Modifier
+            .size(64.dp)
+            .scale(pressScale)
+            .clip(RoundedCornerShape(16.dp))
+            .clickable(interactionSource = interactionSource, indication = null) { onClick() },
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = "000",
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Medium,
+            color = TextPrimary
+        )
+    }
+}
+
+@Composable
+private fun KeypadKey(key: String, onClick: () -> Unit) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val pressScale by animateFloatAsState(
+        targetValue = if (isPressed) 0.88f else 1f,
+        animationSpec = spring(stiffness = Spring.StiffnessHigh),
+        label = "keyScale"
+    )
+    Box(
+        modifier = Modifier
+            .size(64.dp)
+            .scale(pressScale)
+            .clip(RoundedCornerShape(16.dp))
+            .clickable(interactionSource = interactionSource, indication = null) { onClick() },
+        contentAlignment = Alignment.Center
+    ) {
+        Text(key, style = Typography.headlineMedium, color = TextPrimary)
+    }
+}
+
+/**
+ * Nút xóa: tap = xóa 1 số, giữ (long-press) = xóa toàn bộ
+ */
+@Composable
+private fun DeleteKey(onDelete: () -> Unit, onDeleteAll: () -> Unit) {
+    var isPressed by remember { mutableStateOf(false) }
+    val pressScale by animateFloatAsState(
+        targetValue = if (isPressed) 0.88f else 1f,
+        animationSpec = spring(stiffness = Spring.StiffnessHigh),
+        label = "deleteKeyScale"
+    )
+
+    Box(
+        modifier = Modifier
+            .size(64.dp)
+            .scale(pressScale)
+            .clip(RoundedCornerShape(16.dp))
+            .pointerInput(onDelete, onDeleteAll) {
+                detectTapGestures(
+                    onPress = {
+                        isPressed = true
+                        try {
+                            awaitRelease()
+                        } finally {
+                            isPressed = false
+                        }
+                    },
+                    onTap = { onDelete() },
+                    onLongPress = { onDeleteAll() }
+                )
+            },
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(Icons.Default.Backspace, contentDescription = "Delete", tint = TextPrimary)
+    }
+}
+
+/**
+ * Dialog popup chứa NumericKeypad để nhập số tiền
+ */
+@Composable
+fun KeypadDialog(
+    title: String = "Enter Amount",
+    initialAmount: String = "",
+    onDismiss: () -> Unit,
+    onConfirm: (String) -> Unit
+) {
+    var amount by remember { mutableStateOf(initialAmount) }
+
+    Dialog(onDismissRequest = { onDismiss() }) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(24.dp))
+                .background(AppBackground)
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = TextPrimary
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Display formatted amount
+            Text(
+                text = "${formatAmountWithCommas(amount)} VND",
+                style = MaterialTheme.typography.displaySmall,
+                fontWeight = FontWeight.Bold,
+                color = TextPrimary
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            NumericKeypad(
+                onNumber = { num ->
+                    when {
+                        num == "000" -> {
+                            if (amount == "0") amount = "000"
+                            else amount += "000"
+                        }
+                        else -> {
+                            if (amount == "0") amount = num
+                            else amount += num
+                        }
+                    }
+                },
+                onDelete = {
+                    if (amount.length > 1) amount = amount.dropLast(1) else amount = "0"
+                },
+                onDeleteAll = {
+                    amount = "0"
+                }
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Buttons
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(GlassBorder)
+                        .clickable { onDismiss() }
+                        .padding(vertical = 14.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("Cancel", color = TextSecondary, fontWeight = FontWeight.Medium)
+                }
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(TextPrimary)
+                        .clickable { onConfirm(amount) }
+                        .padding(vertical = 14.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("Confirm", color = Color.White, fontWeight = FontWeight.Medium)
+                }
+            }
+        }
     }
 }

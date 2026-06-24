@@ -28,6 +28,7 @@ import com.example.data.DebtTransaction
 import com.example.data.DebtTransactionType
 import com.example.ui.components.DirectionLabel
 import com.example.ui.components.GlassCard
+import com.example.ui.components.KeypadDialog
 import com.example.ui.theme.*
 import com.example.viewmodel.DebtDetailViewModel
 import com.example.viewmodel.DebtStats
@@ -211,11 +212,11 @@ fun DebtDetailScreen(
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             DebtInfoItem(
                                 label = "Original Amount",
-                                value = "₫ ${fmt.format(debt.originalAmount)}"
+                                value = "VND ${fmt.format(debt.originalAmount)}"
                             )
                             DebtInfoItem(
                                 label = "Remaining",
-                                value = "₫ ${fmt.format(uiState.stats.remaining)}",
+                                value = "VND ${fmt.format(uiState.stats.remaining)}",
                                 valueColor = if (uiState.stats.remaining <= 0) GainGreen else TextPrimary
                             )
                         }
@@ -362,12 +363,13 @@ fun DebtDetailScreen(
 
     // ── Dialogs ───────────────────────────────────────────────────────────────
     if (showAddDebtDialog) {
-        AmountInputDialog(
+        KeypadDialog(
             title = "Add Debt Amount",
-            confirmLabel = "Add Debt",
-            confirmColor = SecondaryVibrant,
-            onConfirm = { amount, note, date ->
-                viewModel.addDebtAmount(amount, note, date)
+            onConfirm = { amountRaw ->
+                val amount = amountRaw.toDoubleOrNull() ?: 0.0
+                if (amount > 0) {
+                    viewModel.addDebtAmount(amount, "", System.currentTimeMillis())
+                }
                 showAddDebtDialog = false
             },
             onDismiss = { showAddDebtDialog = false }
@@ -375,12 +377,13 @@ fun DebtDetailScreen(
     }
 
     if (showAddPaymentDialog) {
-        AmountInputDialog(
+        KeypadDialog(
             title = "Record Payment",
-            confirmLabel = "Add Payment",
-            confirmColor = GainGreen,
-            onConfirm = { amount, note, date ->
-                viewModel.addPayment(amount, note, date)
+            onConfirm = { amountRaw ->
+                val amount = amountRaw.toDoubleOrNull() ?: 0.0
+                if (amount > 0) {
+                    viewModel.addPayment(amount, "", System.currentTimeMillis())
+                }
                 showAddPaymentDialog = false
             },
             onDismiss = { showAddPaymentDialog = false }
@@ -404,7 +407,7 @@ fun DebtDetailScreen(
             confirmButton = {
                 TextButton(onClick = {
                     showDeleteDialog = false
-                    onNavigateBack()
+                    viewModel.deleteDebt { onNavigateBack() }
                 }) {
                     Text("Delete", color = ExpenseRed, fontWeight = FontWeight.SemiBold)
                 }
@@ -435,8 +438,8 @@ private fun DebtStatsCard(stats: DebtStats, fmt: NumberFormat) {
             Text("Statistics", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, color = TextPrimary)
 
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                StatPill(label = "Total Added", value = "₫ ${fmt.format(stats.totalAdded)}", color = SecondaryVibrant)
-                StatPill(label = "Total Paid", value = "₫ ${fmt.format(stats.totalPaid)}", color = GainGreen)
+                StatPill(label = "Total Added", value = "VND ${fmt.format(stats.totalAdded)}", color = SecondaryVibrant)
+                StatPill(label = "Total Paid", value = "VND ${fmt.format(stats.totalPaid)}", color = GainGreen)
             }
 
             // Progress bar
@@ -475,7 +478,7 @@ private fun DebtStatsCard(stats: DebtStats, fmt: NumberFormat) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Text("Remaining", style = MaterialTheme.typography.bodyMedium, color = TextSecondary)
                 Text(
-                    "₫ ${fmt.format(stats.remaining)}",
+                    "VND ${fmt.format(stats.remaining)}",
                     style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.Bold,
                     color = if (stats.remaining <= 0) GainGreen else TextPrimary
@@ -566,7 +569,7 @@ private fun TransactionRow(tx: DebtTransaction, fmt: NumberFormat) {
                 }
             }
             Text(
-                text = "$amountPrefix₫ ${fmt.format(tx.amount)}",
+                text = "$amountPrefixVND ${fmt.format(tx.amount)}",
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.Bold,
                 color = amountColor
@@ -600,7 +603,7 @@ fun AmountInputDialog(
                 OutlinedTextField(
                     value = amountText,
                     onValueChange = { amountText = it.filter { c -> c.isDigit() || c == '.' } },
-                    label = { Text("Amount (₫)") },
+                    label = { Text("Amount (VND)") },
                     singleLine = true,
                     keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
                         keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal

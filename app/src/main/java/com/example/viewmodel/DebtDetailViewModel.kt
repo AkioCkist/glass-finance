@@ -100,6 +100,14 @@ class DebtDetailViewModel(
         _uiState.update { it.copy(actionSuccess = null) }
     }
 
+    fun deleteDebt(onSuccess: () -> Unit) {
+        viewModelScope.launch {
+            repository.deleteDebt(debtId)
+                .onSuccess { onSuccess() }
+                .onFailure { e -> _uiState.update { it.copy(error = e.message) } }
+        }
+    }
+
     // ── Due date helpers ──────────────────────────────────────────────────────
 
     private fun buildDueDateStatus(dueDate: Long?): DueDateStatus {

@@ -5,7 +5,8 @@ import java.util.Calendar
 
 class DebtRepository(
     private val debtDao: DebtDao,
-    private val txDao: DebtTransactionDao
+    private val txDao: DebtTransactionDao,
+    private val transactionDao: TransactionDao
 ) {
 
     fun getAllDebtsWithPerson(): Flow<List<DebtWithPerson>> = debtDao.getAllDebtsWithPerson()
@@ -53,6 +54,17 @@ class DebtRepository(
                     transactionDate = createdDate
                 )
             )
+            
+            // Also insert into main transaction table for SummaryScreen
+            transactionDao.insertTransaction(
+                Transaction(
+                    amount = originalAmount,
+                    note = "$title - Initial debt",
+                    isIncome = direction == DebtDirection.OWED_TO_ME,
+                    timestamp = createdDate
+                )
+            )
+            
             Result.success(debtId)
         } catch (e: Exception) {
             Result.failure(e)
@@ -107,6 +119,17 @@ class DebtRepository(
                     transactionDate = date
                 )
             )
+            
+            // Also insert into main transaction table for SummaryScreen
+            transactionDao.insertTransaction(
+                Transaction(
+                    amount = amount,
+                    note = "${existing.title} - ${if (note.isNotBlank()) note else "Add debt"}",
+                    isIncome = existing.direction == DebtDirection.OWED_TO_ME,
+                    timestamp = date
+                )
+            )
+            
             refreshStatus(existing)
             Result.success(Unit)
         } catch (e: Exception) {
@@ -131,6 +154,18 @@ class DebtRepository(
                     transactionDate = date
                 )
             )
+            
+            // Also insert into main transaction table for SummaryScreen
+            // Payment is opposite: if OWED_TO_ME, payment is expense; if I_OWE, payment is income
+            transactionDao.insertTransaction(
+                Transaction(
+                    amount = amount,
+                    note = "${existing.title} - ${if (note.isNotBlank()) note else "Payment"}",
+                    isIncome = existing.direction == DebtDirection.I_OWE,
+                    timestamp = date
+                )
+            )
+            
             refreshStatus(existing)
             Result.success(Unit)
         } catch (e: Exception) {

@@ -2,10 +2,13 @@ package com.example.ui.screens
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -19,12 +22,18 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import com.example.data.DebtDirection
 import com.example.data.DebtPerson
 import com.example.ui.components.GlassCard
+import com.example.ui.components.KeypadDialog
+import com.example.ui.components.formatAmountWithCommas
 import com.example.ui.theme.*
 import java.text.SimpleDateFormat
 import java.util.*
@@ -48,16 +57,18 @@ fun DebtFormScreen(
 ) {
     var title by remember { mutableStateOf(initialTitle) }
     var note by remember { mutableStateOf(initialNote) }
-    var amountText by remember { mutableStateOf(initialAmount) }
+    // Store raw digits only (no commas)
+    var amountRaw by remember { mutableStateOf(initialAmount.filter { it.isDigit() }) }
     var dueDate by remember { mutableStateOf(initialDueDate) }
     var direction by remember { mutableStateOf(initialDirection) }
     var selectedPersonId by remember { mutableStateOf(personId) }
     var showPersonPicker by remember { mutableStateOf(false) }
     var showDatePicker by remember { mutableStateOf(false) }
     var showAddPersonDialog by remember { mutableStateOf(false) }
+    var showKeypadDialog by remember { mutableStateOf(false) }
     var newPersonName by remember { mutableStateOf("") }
 
-    val amountValid = amountText.toDoubleOrNull()?.let { it > 0 } == true
+    val amountValid = amountRaw.toLongOrNull()?.let { it > 0 } == true
     val formValid = title.isNotBlank() && amountValid && selectedPersonId != null
 
     Column(
@@ -152,15 +163,13 @@ fun DebtFormScreen(
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         DirectionToggleButton(
-                            label = "Owed to me",
-                            description = "They owe me",
+                            label = "They owe me",
                             isSelected = direction == DebtDirection.OWED_TO_ME,
                             modifier = Modifier.weight(1f)
                         ) { direction = DebtDirection.OWED_TO_ME }
 
                         DirectionToggleButton(
-                            label = "I owe",
-                            description = "I owe them",
+                            label = "I owe them",
                             isSelected = direction == DebtDirection.I_OWE,
                             modifier = Modifier.weight(1f)
                         ) { direction = DebtDirection.I_OWE }
@@ -191,21 +200,28 @@ fun DebtFormScreen(
             // Amount
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Amount (₫) *", style = MaterialTheme.typography.labelMedium, color = TextSecondary)
-                    OutlinedTextField(
-                        value = amountText,
-                        onValueChange = { amountText = it.filter { c -> c.isDigit() || c == '.' } },
-                        modifier = Modifier.fillMaxWidth(),
-                        placeholder = { Text("0") },
-                        singleLine = true,
-                        shape = RoundedCornerShape(16.dp),
-                        leadingIcon = { Text("₫", color = TextSecondary) },
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = TextPrimary,
-                            unfocusedBorderColor = GlassBorder,
-                            cursorColor = TextPrimary
-                        )
-                    )
+                    Text("Amount (VND) *", style = MaterialTheme.typography.labelMedium, color = TextSecondary)
+                    GlassCard(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { showKeypadDialog = true }
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            val formattedAmount = formatAmountWithCommas(amountRaw)
+                            Text(
+                                text = if (amountRaw.isNotEmpty()) "$formattedAmount VND" else "0 VND",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = if (amountRaw.isNotEmpty()) TextPrimary else TextSecondary
+                            )
+                            Icon(Icons.Default.Edit, contentDescription = "Edit amount", tint = TextSecondary)
+                        }
+                    }
                 }
             }
 
@@ -275,7 +291,7 @@ fun DebtFormScreen(
                         .clip(RoundedCornerShape(16.dp))
                         .background(if (formValid) TextPrimary else GlassBorder)
                         .clickable(enabled = formValid && !isLoading) {
-                            val amount = amountText.toDoubleOrNull() ?: return@clickable
+                            val amount = amountRaw.toDoubleOrNull() ?: return@clickable
                             onSave(selectedPersonId!!, title, note, amount, dueDate, direction)
                         }
                         .padding(vertical = 16.dp),
@@ -454,12 +470,23 @@ fun DebtFormScreen(
             DatePicker(state = datePickerState)
         }
     }
+
+    // Keypad popup dialog
+    if (showKeypadDialog) {
+        KeypadDialog(
+            initialAmount = amountRaw,
+            onDismiss = { showKeypadDialog = false },
+            onConfirm = { newAmount ->
+                amountRaw = newAmount
+                showKeypadDialog = false
+            }
+        )
+    }
 }
 
 @Composable
 private fun DirectionToggleButton(
     label: String,
-    description: String,
     isSelected: Boolean,
     modifier: Modifier = Modifier,
     onClick: () -> Unit
@@ -495,11 +522,6 @@ private fun DirectionToggleButton(
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.SemiBold,
                 color = textColor
-            )
-            Text(
-                text = description,
-                style = MaterialTheme.typography.labelMedium,
-                color = descColor
             )
         }
     }
