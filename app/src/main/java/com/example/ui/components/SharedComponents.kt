@@ -8,8 +8,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.AddCard
 import androidx.compose.material.icons.outlined.ArrowDownward
 import androidx.compose.material.icons.outlined.ArrowUpward
+import androidx.compose.material.icons.outlined.AttachMoney
 import androidx.compose.material.icons.outlined.InsertChartOutlined
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -273,19 +275,14 @@ fun FloatingBottomNav(
                 onClick = { onNavigate("overview") }
             )
             NavIcon(
-                icon = Icons.Outlined.ArrowDownward, // represent income
-                isActive = currentRoute == "income",
-                onClick = { onNavigate("income") }
-            )
-            NavIcon(
-                icon = Icons.Outlined.ArrowUpward, // represent spend
+                icon = Icons.Outlined.AttachMoney, // represent spend
                 isActive = currentRoute == "spend",
                 onClick = { onNavigate("spend") }
             )
             NavIcon(
-                icon = Icons.Outlined.InsertChartOutlined, // represent history/chart
-                isActive = currentRoute == "history",
-                onClick = { onNavigate("history") }
+                icon = Icons.Outlined.InsertChartOutlined, // represent summary
+                isActive = currentRoute == "summary",
+                onClick = { onNavigate("summary") }
             )
         }
     }

@@ -49,6 +49,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.material3.*
+import androidx.compose.ui.tooling.preview.Preview
 import com.example.ui.components.*
 import com.example.ui.theme.*
 import com.example.viewmodel.FinanceViewModel
@@ -71,12 +72,9 @@ fun SpendScreen(viewModel: FinanceViewModel) {
     var isIncome by remember { mutableStateOf(false) }
     var note by remember { mutableStateOf("") }
     var isNoteFocused by remember { mutableStateOf(false) }
-
     val coroutineScope = rememberCoroutineScope()
     val shakeOffset = remember { Animatable(0f) }
 
-    // Màu này CHỈ dùng cho dấu +/- — không áp dụng cho bất kỳ phần tử nào khác,
-    // để giữ đúng tone trắng/đen/xám trung tính của toàn màn hình.
     val signColor by animateColorAsState(
         targetValue = if (isIncome) AmountIncomeColor else AmountSpendColor,
         animationSpec = tween(durationMillis = 250),
@@ -86,21 +84,20 @@ fun SpendScreen(viewModel: FinanceViewModel) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 24.dp),
+            // ✅ GIẢM PADDING NGANG TỪ 24.dp XUỐNG 16.dp ĐỂ TĂNG KHÔNG GIAN HIỂN THỊ CHO AMOUNT ENTRY
+            .padding(horizontal = 16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         TopAppBar(title = if (isIncome) "Income" else "Spend")
         Spacer(modifier = Modifier.height(24.dp))
 
-        // 1. Toggle Spend / Income — pill trượt mượt, vẫn tone trung tính (đen/trắng)
         SpendIncomeToggle(
             isIncome = isIncome,
             onToggle = { isIncome = it }
         )
 
-        Spacer(modifier = Modifier.height(40.dp))
+        Spacer(modifier = Modifier.height(32.dp))
 
-        // 2. Amount Entry — căn giữa, scale đồng bộ giữa số tiền và "VND"
         Box(modifier = Modifier.offset(x = shakeOffset.value.dp)) {
             AmountEntry(
                 amount = amount,
@@ -109,13 +106,11 @@ fun SpendScreen(viewModel: FinanceViewModel) {
             )
         }
 
-
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(12.dp))
         Text("From Wallet", style = Typography.bodyLarge, color = TextSecondary)
 
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
-        // 3. Note — bấm vào là gõ luôn, kèm gợi ý chip phía dưới (giống Zalopay)
         NoteField(
             note = note,
             onNoteChange = { note = it },
@@ -123,9 +118,8 @@ fun SpendScreen(viewModel: FinanceViewModel) {
             onFocusChange = { isNoteFocused = it }
         )
 
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
-        // 4. Confirm — tone trung tính, không phụ thuộc accent color
         val isConfirmEnabled = (amount.toDoubleOrNull() ?: 0.0) > 0.0
         val confirmAlpha by animateFloatAsState(
             targetValue = if (isConfirmEnabled) 1f else 0.4f,
@@ -155,14 +149,12 @@ fun SpendScreen(viewModel: FinanceViewModel) {
 
         Spacer(modifier = Modifier.weight(1f))
 
-        // Numeric Keypad
         NumericKeypad(
             onNumber = { num ->
                 val currentDigits = if (amount == "0") 0 else amount.count { it.isDigit() }
                 val newDigits = num.count { it.isDigit() }
                 if (currentDigits + newDigits > 15) {
                     coroutineScope.launch {
-                        // Rung biên độ nhỏ (4f-6f), tần suất cực nhanh (15ms)
                         repeat(5) {
                             shakeOffset.animateTo(4f, animationSpec = tween(15))
                             shakeOffset.animateTo(-6f, animationSpec = tween(15))
@@ -175,14 +167,11 @@ fun SpendScreen(viewModel: FinanceViewModel) {
                 }
 
                 when {
-                    // ✅ Xử lý riêng cho nút 000
                     num == "000" -> {
-                        // Không cho thêm 000 nếu đã có dấu thập phân (5.5 + 000 = vô lý)
                         if (amount.contains(".")) return@NumericKeypad
                         if (amount == "0") amount = "000"
                         else amount += "000"
                     }
-                    // Các số bình thường
                     else -> {
                         if (amount == "0") amount = num
                         else amount += num
@@ -302,29 +291,25 @@ private fun AmountEntry(
     signColor: Color
 ) {
     val formatted = formatAmount(amount)
-
-    // Đếm số chữ số thực (bỏ dấu phẩy, dấu chấm) để tính tỉ lệ scale theo độ dài.
     val digitCount = amount.count { it.isDigit() }
 
-    // Cỡ chữ CỐ ĐỊNH (không animate trực tiếp) — phần "scale theo độ dài" và "pop khi gõ"
-    // đều áp dụng bằng graphicsLayer scale, không đổi giá trị sp thật.
-    val baseFontSize = 40.sp
-    val minScale = 0.45f
+    // ✅ CỠ CHỮ ĐỘNG: giảm theo số chữ số, thay vì dùng graphicsLayer scale
+    val baseFontSize = 56f // sp as float để animate mượt
+    val minFontSize = 26f
 
-    // Từ chữ số thứ 7 trở đi (>6 số), giảm dần 6% mỗi số thêm, có giới hạn dưới.
-    val overflowDigits = (digitCount - 6).coerceAtLeast(0)
-    val targetLengthScale = (1f - overflowDigits * 0.06f).coerceAtLeast(minScale)
+    // Từ chữ số thứ 6 trở đi, giảm 4sp mỗi chữ số
+    val overflowDigits = (digitCount - 5).coerceAtLeast(0)
+    val targetFontSize = (baseFontSize - overflowDigits * 4f).coerceAtLeast(minFontSize)
 
-    // Scale theo độ dài số (rẻ: chỉ ảnh hưởng layer, không remeasure)
-    val lengthScale by animateFloatAsState(
-        targetValue = targetLengthScale,
+    val animatedFontSize by animateFloatAsState(
+        targetValue = targetFontSize,
         animationSpec = tween(durationMillis = 180),
-        label = "amountLengthScale"
+        label = "amountFontSize"
     )
+    val fontSize = animatedFontSize.sp
+    val vndFontSize = (animatedFontSize * 0.55f).sp
 
-    // "Pop" nhẹ mỗi khi số tiền thay đổi — dùng Animatable + graphicsLayer (không AnimatedContent,
-    // không animate fontSize), nên khi user spam bấm số/xóa liên tục, animation chỉ retarget giá trị
-    // hiện có trên layer, không gây đo lại layout → không giật.
+    // Pop scale vẫn dùng graphicsLayer (vì spam bấm, không remeasure)
     val popScale = remember { Animatable(1f) }
     LaunchedEffect(formatted) {
         popScale.snapTo(0.95f)
@@ -334,26 +319,21 @@ private fun AmountEntry(
         )
     }
 
-    // Tổng hợp 2 hiệu ứng scale lại thành 1 giá trị duy nhất áp lên graphicsLayer
-    val combinedScale = lengthScale * popScale.value
-
     BoxWithConstraints(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp), // ✅ Chừa space 2 bên
         contentAlignment = Alignment.Center
     ) {
         Row(
             modifier = Modifier
-                .widthIn(max = maxWidth)
                 .graphicsLayer {
-                    scaleX = combinedScale
-                    scaleY = combinedScale
+                    scaleX = popScale.value
+                    scaleY = popScale.value
                 },
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Dấu +/- — phần tử duy nhất mang màu accent, đổi mượt theo Income/Spend.
-            // Toggle Income/Spend không bị spam (chỉ 2 trạng thái, người dùng không bấm liên tục),
-            // nên AnimatedContent ở đây an toàn, không phải nguồn lag.
             AnimatedContent(
                 targetState = isIncome,
                 transitionSpec = {
@@ -364,9 +344,11 @@ private fun AmountEntry(
             ) { income ->
                 Text(
                     text = if (income) "+" else "-",
-                    fontSize = baseFontSize,
+                    fontSize = fontSize,
+                    lineHeight = fontSize,
                     style = Typography.displayLarge,
-                    color = signColor
+                    color = signColor,
+                    maxLines = 1
                 )
             }
 
@@ -374,22 +356,23 @@ private fun AmountEntry(
 
             Text(
                 text = formatted,
-                fontSize = baseFontSize,
-                lineHeight = baseFontSize,
+                fontSize = fontSize,
+                lineHeight = fontSize,
                 style = Typography.displayLarge,
                 color = TextPrimary,
                 maxLines = 1,
                 softWrap = false
             )
 
-            Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.width(6.dp))
 
             Text(
                 text = "VND",
-                fontSize = baseFontSize * 0.55f,
-                lineHeight = baseFontSize * 0.55f,
+                fontSize = vndFontSize,
+                lineHeight = vndFontSize,
                 style = Typography.displayLarge,
-                color = TextSecondary
+                color = TextSecondary,
+                maxLines = 1
             )
         }
     }

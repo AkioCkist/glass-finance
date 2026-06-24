@@ -24,8 +24,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.ui.components.FloatingBottomNav
-import com.example.ui.screens.HistoryScreen
-import com.example.ui.screens.IncomeScreen
+import com.example.ui.screens.SummaryScreen
 import com.example.ui.screens.OverviewScreen
 import com.example.ui.screens.SpendScreen
 import com.example.ui.theme.*
@@ -60,9 +59,8 @@ fun FinanceTrackerApp() {
     fun getRouteIndex(route: String?): Int {
         return when (route) {
             "overview" -> 0
-            "income" -> 1
-            "spend" -> 2
-            "history" -> 3
+            "spend" -> 1
+            "summary" -> 2
             else -> 0
         }
     }
@@ -139,9 +137,8 @@ fun FinanceTrackerApp() {
                 }
             ) {
                 composable("overview") { OverviewScreen(viewModel) }
-                composable("income") { IncomeScreen(viewModel) }
                 composable("spend") { SpendScreen(viewModel) }
-                composable("history") { HistoryScreen(viewModel) }
+                composable("summary") { SummaryScreen(viewModel) }
             }
         }
     }
