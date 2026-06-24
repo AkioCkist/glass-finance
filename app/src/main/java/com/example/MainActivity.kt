@@ -13,23 +13,25 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
+import com.example.data.DebtPersonRepository
+import com.example.data.DebtRepository
 import com.example.ui.components.FloatingBottomNav
-import com.example.ui.screens.SummaryScreen
-import com.example.ui.screens.OverviewScreen
-import com.example.ui.screens.SpendScreen
+import com.example.ui.screens.*
 import com.example.ui.theme.*
-import com.example.viewmodel.FinanceViewModel
-import com.example.viewmodel.FinanceViewModelFactory
+import com.example.viewmodel.*
+import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -52,15 +54,36 @@ fun FinanceTrackerApp() {
     val context = LocalContext.current
     val application = context.applicationContext as FinanceApplication
     val database = application.database
-    val viewModel: FinanceViewModel = viewModel(
+
+    // Main finance VM
+    val financeViewModel: FinanceViewModel = viewModel(
         factory = FinanceViewModelFactory(database.transactionDao())
     )
 
+    // Debt repositories
+    val debtRepository = remember { DebtRepository(database.debtDao(), database.debtTransactionDao()) }
+    val personRepository = remember { DebtPersonRepository(database.debtPersonDao()) }
+
+    // Debt ViewModels
+    val debtListViewModel: DebtListViewModel = viewModel(
+        factory = DebtListViewModelFactory(debtRepository)
+    )
+    val personViewModel: DebtPersonViewModel = viewModel(
+        factory = DebtPersonViewModelFactory(personRepository)
+    )
+
+    // Collect persons for debt form
+    val persons by personViewModel.uiState.collectAsState()
+
+    // Sub-screens (debt detail, form, people) hide bottom nav
+    val isSubScreen = currentRoute.startsWith("debt/") && currentRoute != "debt/list"
+
     fun getRouteIndex(route: String?): Int {
-        return when (route) {
-            "overview" -> 0
-            "spend" -> 1
-            "summary" -> 2
+        return when {
+            route == "overview" -> 0
+            route == "spend" -> 1
+            route == "summary" -> 2
+            route == "debt/list" -> 3
             else -> 0
         }
     }
@@ -71,25 +94,25 @@ fun FinanceTrackerApp() {
             containerColor = Color.Transparent,
             modifier = Modifier.fillMaxSize(),
             bottomBar = {
-                // Floating Bottom Nav inside a Box to center it securely
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        // lowered padding from 32.dp to 12.dp
-                        .padding(bottom = 12.dp)
-                        .navigationBarsPadding(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    FloatingBottomNav(
-                        currentRoute = currentRoute,
-                        onNavigate = { route ->
-                            navController.navigate(route) {
-                                popUpTo(navController.graph.startDestinationId) { saveState = true }
-                                launchSingleTop = true
-                                restoreState = true
+                if (!isSubScreen) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 12.dp)
+                            .navigationBarsPadding(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        FloatingBottomNav(
+                            currentRoute = currentRoute,
+                            onNavigate = { route ->
+                                navController.navigate(route) {
+                                    popUpTo(navController.graph.startDestinationId) { saveState = true }
+                                    launchSingleTop = true
+                                    restoreState = true
+                                }
                             }
-                        }
-                    )
+                        )
+                    }
                 }
             }
         ) { innerPadding ->
@@ -136,10 +159,201 @@ fun FinanceTrackerApp() {
                     }
                 }
             ) {
-                composable("overview") { OverviewScreen(viewModel) }
-                composable("spend") { SpendScreen(viewModel) }
-                composable("summary") { SummaryScreen(viewModel) }
+                composable("overview") { OverviewScreen(financeViewModel) }
+                composable("spend") { SpendScreen(financeViewModel) }
+                composable("summary") { SummaryScreen(financeViewModel) }
+
+                // Debt list
+                composable("debt/list") {
+                    DebtListScreen(
+                        viewModel = debtListViewModel,
+                        onNavigateToDetail = { debtId ->
+                            navController.navigate("debt/detail/$debtId")
+                        },
+                        onNavigateToAdd = {
+                            navController.navigate("debt/add")
+                        },
+                        onNavigateToPeople = {
+                            navController.navigate("debt/people")
+                        }
+                    )
+                }
+
+                // Debt detail
+                composable(
+                    route = "debt/detail/{debtId}",
+                    arguments = listOf(navArgument("debtId") { type = NavType.LongType })
+                ) { backStackEntry ->
+                    val debtId = backStackEntry.arguments?.getLong("debtId") ?: return@composable
+                    val detailViewModel: DebtDetailViewModel = viewModel(
+                        factory = DebtDetailViewModelFactory(debtId, debtRepository)
+                    )
+                    DebtDetailScreen(
+                        viewModel = detailViewModel,
+                        onNavigateBack = { navController.popBackStack() },
+                        onNavigateToEdit = { id -> navController.navigate("debt/edit/$id") }
+                    )
+                }
+
+                // Add debt
+                composable("debt/add") {
+                    DebtAddScreen(
+                        persons = persons.persons,
+                        repository = debtRepository,
+                        personRepository = personRepository,
+                        onSaved = { navController.popBackStack() },
+                        onNavigateBack = { navController.popBackStack() }
+                    )
+                }
+
+                // Edit debt
+                composable(
+                    route = "debt/edit/{debtId}",
+                    arguments = listOf(navArgument("debtId") { type = NavType.LongType })
+                ) { backStackEntry ->
+                    val debtId = backStackEntry.arguments?.getLong("debtId") ?: return@composable
+                    DebtEditScreen(
+                        debtId = debtId,
+                        persons = persons.persons,
+                        repository = debtRepository,
+                        personRepository = personRepository,
+                        onSaved = { navController.popBackStack() },
+                        onNavigateBack = { navController.popBackStack() }
+                    )
+                }
+
+                // People management
+                composable("debt/people") {
+                    DebtPersonScreen(
+                        viewModel = personViewModel,
+                        onNavigateBack = { navController.popBackStack() }
+                    )
+                }
             }
         }
     }
+}
+
+// Wrapper screens for add/edit with local state
+
+@Composable
+fun DebtAddScreen(
+    persons: List<com.example.data.DebtPerson>,
+    repository: DebtRepository,
+    personRepository: DebtPersonRepository,
+    onSaved: () -> Unit,
+    onNavigateBack: () -> Unit
+) {
+    var isLoading by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    DebtFormScreen(
+        personId = persons.firstOrNull()?.id,
+        persons = persons,
+        isEdit = false,
+        initialTitle = "",
+        initialNote = "",
+        initialAmount = "",
+        initialDueDate = null,
+        initialDirection = com.example.data.DebtDirection.OWED_TO_ME,
+        isLoading = isLoading,
+        error = error,
+        onSave = { personId, title, note, amount, dueDate, direction ->
+            isLoading = true
+            kotlinx.coroutines.GlobalScope.launch {
+                val result = repository.createDebt(
+                    personId = personId,
+                    title = title,
+                    note = note,
+                    originalAmount = amount,
+                    createdDate = System.currentTimeMillis(),
+                    dueDate = dueDate,
+                    direction = direction
+                )
+                isLoading = false
+                if (result.isSuccess) {
+                    onSaved()
+                } else {
+                    error = result.exceptionOrNull()?.message ?: "Failed to create debt"
+                }
+            }
+        },
+        onNavigateBack = onNavigateBack,
+        onAddPerson = { name ->
+            kotlinx.coroutines.GlobalScope.launch {
+                personRepository.addPerson(name)
+            }
+        }
+    )
+}
+
+@Composable
+fun DebtEditScreen(
+    debtId: Long,
+    persons: List<com.example.data.DebtPerson>,
+    repository: DebtRepository,
+    personRepository: DebtPersonRepository,
+    onSaved: () -> Unit,
+    onNavigateBack: () -> Unit
+) {
+    var debt by remember { mutableStateOf<com.example.data.Debt?>(null) }
+    var isLoading by remember { mutableStateOf(true) }
+    var isSaving by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(debtId) {
+        isLoading = true
+        val result = repository.observeDebtWithPerson(debtId)
+            .firstOrNull()
+        result?.let {
+            debt = it.debt
+        }
+        isLoading = false
+    }
+
+    val d = debt
+    if (isLoading || d == null) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator(color = TextPrimary)
+        }
+        return
+    }
+
+    DebtFormScreen(
+        personId = d.personId,
+        persons = persons,
+        isEdit = true,
+        initialTitle = d.title,
+        initialNote = d.note,
+        initialAmount = d.originalAmount.toString(),
+        initialDueDate = d.dueDate,
+        initialDirection = d.direction,
+        isLoading = isSaving,
+        error = error,
+        onSave = { personId, title, note, _, dueDate, direction ->
+            isSaving = true
+            kotlinx.coroutines.GlobalScope.launch {
+                val result = repository.updateDebt(
+                    debtId = debtId,
+                    personId = personId,
+                    title = title,
+                    note = note,
+                    dueDate = dueDate,
+                    direction = direction
+                )
+                isSaving = false
+                if (result.isSuccess) {
+                    onSaved()
+                } else {
+                    error = result.exceptionOrNull()?.message ?: "Failed to update debt"
+                }
+            }
+        },
+        onNavigateBack = onNavigateBack,
+        onAddPerson = { name ->
+            kotlinx.coroutines.GlobalScope.launch {
+                personRepository.addPerson(name)
+            }
+        }
+    )
 }

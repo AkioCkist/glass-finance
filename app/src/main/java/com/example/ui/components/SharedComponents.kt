@@ -14,6 +14,7 @@ import androidx.compose.material.icons.outlined.ArrowUpward
 import androidx.compose.material.icons.outlined.AttachMoney
 import androidx.compose.material.icons.outlined.InsertChartOutlined
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -23,6 +24,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.data.DebtDirection
 import com.example.ui.theme.*
 
 @Composable
@@ -256,17 +258,17 @@ fun FloatingBottomNav(
 ) {
     Box(
         modifier = Modifier
-            .width(280.dp)
+            .width(320.dp)
             .height(64.dp)
             .clip(RoundedCornerShape(32.dp))
             .background(GlassWhite)
             .border(1.dp, GlassBorder, RoundedCornerShape(32.dp))
-            .padding(horizontal = 24.dp),
+            .padding(horizontal = 16.dp),
         contentAlignment = Alignment.Center
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically
         ) {
             NavIcon(
@@ -275,16 +277,42 @@ fun FloatingBottomNav(
                 onClick = { onNavigate("overview") }
             )
             NavIcon(
-                icon = Icons.Outlined.AttachMoney, // represent spend
+                icon = Icons.Outlined.AttachMoney,
                 isActive = currentRoute == "spend",
                 onClick = { onNavigate("spend") }
             )
             NavIcon(
-                icon = Icons.Outlined.InsertChartOutlined, // represent summary
+                icon = Icons.Outlined.InsertChartOutlined,
                 isActive = currentRoute == "summary",
                 onClick = { onNavigate("summary") }
             )
+            NavIcon(
+                icon = Icons.Default.AccountBalanceWallet,
+                isActive = currentRoute == "debt/list",
+                onClick = { onNavigate("debt/list") }
+            )
         }
+    }
+}
+
+@Composable
+fun DirectionLabel(direction: DebtDirection) {
+    val (bg, fg, label) = when (direction) {
+        DebtDirection.OWED_TO_ME -> Triple(GainGreen.copy(alpha = 0.1f), GainGreen, "Owed to me")
+        DebtDirection.I_OWE -> Triple(SecondaryVibrant.copy(alpha = 0.1f), SecondaryVibrant, "I owe")
+    }
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(10.dp))
+            .background(bg)
+            .padding(horizontal = 8.dp, vertical = 3.dp)
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = fg,
+            fontWeight = FontWeight.SemiBold
+        )
     }
 }
 
