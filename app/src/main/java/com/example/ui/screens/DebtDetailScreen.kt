@@ -569,7 +569,7 @@ private fun TransactionRow(tx: DebtTransaction, fmt: NumberFormat) {
                 }
             }
             Text(
-                text = "$amountPrefixVND ${fmt.format(tx.amount)}",
+                text = "$amountPrefix VND ${fmt.format(tx.amount)}",
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.Bold,
                 color = amountColor
