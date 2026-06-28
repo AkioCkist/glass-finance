@@ -24,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -55,6 +56,7 @@ fun DebtFormScreen(
     onNavigateBack: () -> Unit,
     onAddPerson: (String) -> Unit
 ) {
+    val focusManager = LocalFocusManager.current
     var title by remember { mutableStateOf(initialTitle) }
     var note by remember { mutableStateOf(initialNote) }
     // Store raw digits only (no commas)
@@ -90,7 +92,10 @@ fun DebtFormScreen(
                     .clip(CircleShape)
                     .background(GlassWhite)
                     .border(1.dp, GlassBorder, CircleShape)
-                    .clickable { onNavigateBack() },
+                    .clickable { 
+                        focusManager.clearFocus()
+                        onNavigateBack() 
+                    },
                 contentAlignment = Alignment.Center
             ) {
                 Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = TextPrimary)
@@ -289,8 +294,8 @@ fun DebtFormScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(16.dp))
-                        .background(if (formValid) TextPrimary else GlassBorder)
                         .clickable(enabled = formValid && !isLoading) {
+                            focusManager.clearFocus()
                             val amount = amountRaw.toDoubleOrNull() ?: return@clickable
                             onSave(selectedPersonId!!, title, note, amount, dueDate, direction)
                         }

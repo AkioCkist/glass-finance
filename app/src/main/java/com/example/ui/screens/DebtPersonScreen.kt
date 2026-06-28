@@ -21,6 +21,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
@@ -34,6 +35,7 @@ fun DebtPersonScreen(
     viewModel: DebtPersonViewModel,
     onNavigateBack: () -> Unit
 ) {
+    val focusManager = LocalFocusManager.current
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     var showAddDialog by remember { mutableStateOf(false) }
@@ -78,7 +80,10 @@ fun DebtPersonScreen(
                             .clip(CircleShape)
                             .background(GlassWhite)
                             .border(1.dp, GlassBorder, CircleShape)
-                            .clickable { onNavigateBack() },
+                            .clickable { 
+                                focusManager.clearFocus()
+                                onNavigateBack() 
+                            },
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = TextPrimary)
@@ -304,6 +309,7 @@ private fun PersonNameDialog(
     onConfirm: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
+    val focusManager = LocalFocusManager.current
     var name by remember { mutableStateOf(initialName) }
     val isValid = name.trim().isNotBlank()
 
@@ -329,7 +335,12 @@ private fun PersonNameDialog(
         },
         confirmButton = {
             TextButton(
-                onClick = { if (isValid) onConfirm(name) },
+                onClick = { 
+                    if (isValid) {
+                        focusManager.clearFocus()
+                        onConfirm(name) 
+                    }
+                },
                 enabled = isValid
             ) {
                 Text(confirmLabel, color = if (isValid) TextPrimary else TextSecondary, fontWeight = FontWeight.SemiBold)

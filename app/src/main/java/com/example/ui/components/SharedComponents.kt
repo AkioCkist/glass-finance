@@ -38,10 +38,13 @@ import androidx.compose.ui.window.Dialog
 import com.example.data.DebtDirection
 import com.example.ui.theme.*
 
+import androidx.compose.ui.tooling.preview.Preview
 import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.blur
+import com.kyant.backdrop.effects.lens
 import com.kyant.backdrop.effects.vibrancy
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 
 @Composable
 fun TopAppBar(title: String) {
@@ -275,8 +278,8 @@ fun FloatingBottomNav(
 ) {
     Box(
         modifier = Modifier
-            .width(320.dp)
-            .height(64.dp)
+            .width(220.dp)
+            .height(55.dp)
     ) {
         LiquidBottomTabs(
             selectedTabIndex = { currentRouteIndex },
@@ -320,16 +323,20 @@ fun LiquidBottomTabs(
 ) {
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(24.dp))
+            // Dùng đoạn code drawBackdrop chính xác từ mẫu của bạn
             .drawBackdrop(
                 backdrop = backdropState,
-                shape = { RoundedCornerShape(24.dp) },
+                shape = { CircleShape }, // Đổi sang CircleShape giống code của bạn
                 effects = {
-                    blur(16.dp.toPx())
                     vibrancy()
-                }
+                    blur(4f.dp.toPx())
+                    lens(16f.dp.toPx(), 32f.dp.toPx())
+                },
+                onDrawSurface = { drawRect(Color.White.copy(alpha = 0.5f)) }
             )
-            .border(1.dp, GlassBorder, RoundedCornerShape(24.dp))
+            // Vì dùng CircleShape ở trên nên border và clip cũng phải dùng CircleShape để đồng bộ viền
+            .clip(CircleShape)
+            .border(1.dp, GlassBorder, CircleShape)
     ) {
         Row(
             modifier = Modifier.fillMaxSize(),
@@ -413,7 +420,7 @@ fun NumericKeypad(
                     }
                 }
             }
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(29.dp))
         }
     }
 }
@@ -585,6 +592,30 @@ fun KeypadDialog(
                     Text("Confirm", color = Color.White, fontWeight = FontWeight.Medium)
                 }
             }
+        }
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun FloatingBottomNavPreview() {
+    val backdropState = rememberLayerBackdrop {
+        drawRect(Color.White)
+        drawContent()
+    }
+    MyApplicationTheme {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(120.dp)
+                .background(AppBackground),
+            contentAlignment = Alignment.Center
+        ) {
+            FloatingBottomNav(
+                currentRouteIndex = 0,
+                backdropState = backdropState,
+                onNavigate = {}
+            )
         }
     }
 }

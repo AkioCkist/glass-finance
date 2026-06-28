@@ -95,12 +95,17 @@ fun FinanceTrackerApp() {
     }
 
     Box(modifier = Modifier.fillMaxSize().background(AppBackground)) {
-        // Khởi tạo trạng thái Backdrop để xử lý hiệu ứng kính lỏng (Liquid Glassmorphism)
-        val backdropState = rememberLayerBackdrop()
+        // Áp dụng đúng code mẫu của bạn cho backdrop
+        val backdropState = rememberLayerBackdrop {
+            drawRect(AppBackground) // Dùng màu nền của app thay vì trắng tinh để đồng bộ
+            drawContent()
+        }
 
-        // Bọc toàn bộ layout trong thành phần Backdrop của thư viện để phân tích layer nền phía sau
+        // Bọc NavHost bằng layerBackdrop
         Box(
-            modifier = Modifier.fillMaxSize().layerBackdrop(backdropState)
+            modifier = Modifier
+                .fillMaxSize()
+                .layerBackdrop(backdropState)
         ) {
             Scaffold(
                 containerColor = Color.Transparent,
@@ -110,9 +115,8 @@ fun FinanceTrackerApp() {
                     navController = navController,
                     startDestination = "overview",
                     modifier = Modifier
-                        .fillMaxSize()
-                        // Chừa khoảng trống bên dưới để nội dung danh sách không bị che bởi thanh điều hướng lơ lửng
-                        .padding(bottom = if (!isSubScreen) 88.dp else 0.dp),
+                        .fillMaxSize() // Bỏ padding bottom ở đây để nội dung tràn xuống dưới nav bar
+                    ,
                     enterTransition = {
                         val initialIndex = getRouteIndex(initialState.destination.route)
                         val targetIndex = getRouteIndex(targetState.destination.route)
@@ -244,21 +248,18 @@ fun FinanceTrackerApp() {
             }
         }
 
-        // Thanh Bottom Nav lơ lửng được đặt hoàn toàn ĐỘC LẬP bên ngoài Scaffold, nằm đè lên trên nội dung đang cuộn
+        // Đặt Thanh Bottom Nav theo đúng cấu trúc của bạn
         if (!isSubScreen) {
             Box(
                 modifier = Modifier
-                    .fillMaxWidth()
                     .align(Alignment.BottomCenter)
-                    // windowInsetsPadding đảm bảo khoảng cách thanh điều hướng hệ thống (Android gesture line) hoạt động chuẩn
-                    .windowInsetsPadding(WindowInsets.navigationBars)
-                    .padding(bottom = 16.dp),
-                contentAlignment = Alignment.Center
+                    // Dùng safeContentPadding giống hệt code mẫu của bạn để handle gesture line
+                    .safeContentPadding()
             ) {
                 val routeIndex = getRouteIndex(currentRoute)
                 FloatingBottomNav(
                     currentRouteIndex = routeIndex,
-                    backdropState = backdropState, // Truyền trạng thái backdrop vào để đồng bộ hiệu ứng chuyển tab dạng lỏng
+                    backdropState = backdropState,
                     onNavigate = { index ->
                         val targetRoute = when (index) {
                             0 -> "overview"

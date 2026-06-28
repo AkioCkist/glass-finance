@@ -24,10 +24,11 @@ import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.Icon
@@ -44,10 +45,18 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.Placeable
 import androidx.compose.ui.platform.LocalFocusManager
+import kotlin.math.max
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -72,9 +81,10 @@ private val NoteSuggestions = listOf(
 @Composable
 fun SpendScreen(viewModel: FinanceViewModel,
                 navController: NavController) {
+    val focusManager = LocalFocusManager.current
     var amount by remember { mutableStateOf("0") }
     var isIncome by remember { mutableStateOf(false) }
-    var note by remember { mutableStateOf("") }
+    var note by remember { mutableStateOf(TextFieldValue("")) }
     var isNoteFocused by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
     val shakeOffset = remember { Animatable(0f) }
@@ -216,7 +226,8 @@ fun SpendScreen(viewModel: FinanceViewModel,
                 .clickable(enabled = isConfirmEnabled) {
                     val parsedAmount = amount.toDoubleOrNull() ?: 0.0
                     if (parsedAmount > 0) {
-                        val finalNote = if (note.isNotBlank()) note else if (isIncome) "New Income" else "New Spend"
+                        focusManager.clearFocus()
+                        val finalNote = if (note.text.isNotBlank()) note.text else if (isIncome) "New Income" else "New Spend"
                         viewModel.addTransaction(
                             amount = parsedAmount,
                             note = finalNote,
@@ -224,7 +235,7 @@ fun SpendScreen(viewModel: FinanceViewModel,
                             moneySourceId = selectedSource?.id
                         )
                         amount = "0"
-                        note = ""
+                        note = TextFieldValue("")
                         isNoteFocused = false
                         selectedSource = null
 
@@ -638,11 +649,10 @@ private fun AmountEntry(
  * chỉ là 1 dòng kẻ đứt mỏng. Bấm vào dòng đó để focus và gõ trực tiếp lên trên đường kẻ.
  * Khi đang focus, các chip gợi ý hiện ra ngay dưới, xếp wrap nhiều dòng (không cuộn ngang).
  */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun NoteField(
-    note: String,
-    onNoteChange: (String) -> Unit,
+    note: TextFieldValue,
+    onNoteChange: (TextFieldValue) -> Unit,
     isFocused: Boolean,
     onFocusChange: (Boolean) -> Unit
 ) {
@@ -656,17 +666,24 @@ private fun NoteField(
     ) {
         BasicTextField(
             value = note,
-            onValueChange = { if (it.length <= maxLength) onNoteChange(it) },
+            onValueChange = { if (it.text.length <= maxLength) onNoteChange(it) },
             modifier = Modifier
-                .widthIn(min = 80.dp)
+                .width(220.dp)
                 .focusRequester(focusRequester)
                 .onFocusChanged { onFocusChange(it.isFocused) },
             singleLine = true,
             textStyle = Typography.bodyLarge.copy(color = TextPrimary, textAlign = TextAlign.Center),
             cursorBrush = SolidColor(TextPrimary),
+            keyboardOptions = KeyboardOptions(
+                imeAction = ImeAction.Done,
+                keyboardType = KeyboardType.Text
+            ),
+            keyboardActions = KeyboardActions(
+                onDone = { focusManager.clearFocus() }
+            ),
             decorationBox = { innerTextField ->
                 Box(contentAlignment = Alignment.Center) {
-                    if (note.isEmpty()) {
+                    if (note.text.isEmpty()) {
                         Text("Add a note", style = Typography.bodyLarge, color = TextSecondary)
                     }
                     innerTextField()
@@ -690,22 +707,89 @@ private fun NoteField(
             enter = fadeIn(tween(150)) + expandVertically(tween(150)),
             exit = fadeOut(tween(120)) + shrinkVertically(tween(120))
         ) {
-            FlowRow(
+            SimpleFlowRow(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                horizontalSpacing = 10.dp,
+                verticalSpacing = 10.dp
             ) {
                 NoteSuggestions.forEach { suggestion ->
                     NoteSuggestionChip(
                         text = suggestion,
                         onClick = {
-                            onNoteChange(suggestion)
+                            onNoteChange(TextFieldValue(suggestion, TextRange(suggestion.length)))
                             focusManager.clearFocus()
                         }
                     )
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SimpleFlowRow(
+    modifier: Modifier = Modifier,
+    horizontalSpacing: Dp = 0.dp,
+    verticalSpacing: Dp = 0.dp,
+    content: @Composable () -> Unit
+) {
+    Layout(
+        content = content,
+        modifier = modifier
+    ) { measurables, constraints ->
+        val hSpacing = horizontalSpacing.roundToPx()
+        val vSpacing = verticalSpacing.roundToPx()
+
+        val rows = mutableListOf<List<Placeable>>()
+        val rowHeights = mutableListOf<Int>()
+        val rowWidths = mutableListOf<Int>()
+
+        var currentRow = mutableListOf<Placeable>()
+        var currentRowWidth = 0
+        var currentRowHeight = 0
+
+        measurables.forEach { measurable ->
+            val placeable = measurable.measure(constraints.copy(minWidth = 0, minHeight = 0))
+            val widthWithSpacing = placeable.width + if (currentRow.isEmpty()) 0 else hSpacing
+
+            if (currentRowWidth + widthWithSpacing > constraints.maxWidth && currentRow.isNotEmpty()) {
+                rows.add(currentRow)
+                rowHeights.add(currentRowHeight)
+                rowWidths.add(currentRowWidth)
+
+                currentRow = mutableListOf()
+                currentRowWidth = 0
+                currentRowHeight = 0
+            }
+
+            if (currentRow.isNotEmpty()) {
+                currentRowWidth += hSpacing
+            }
+            currentRow.add(placeable)
+            currentRowWidth += placeable.width
+            currentRowHeight = max(currentRowHeight, placeable.height)
+        }
+
+        if (currentRow.isNotEmpty()) {
+            rows.add(currentRow)
+            rowHeights.add(currentRowHeight)
+            rowWidths.add(currentRowWidth)
+        }
+
+        val totalHeight = rowHeights.sum() + (if (rows.size > 1) (rows.size - 1) * vSpacing else 0)
+
+        layout(constraints.maxWidth, totalHeight) {
+            var y = 0
+            rows.forEachIndexed { index, row ->
+                // Center horizontally
+                var x = (constraints.maxWidth - rowWidths[index]) / 2
+                row.forEach { placeable ->
+                    placeable.placeRelative(x, y)
+                    x += placeable.width + hSpacing
+                }
+                y += rowHeights[index] + vSpacing
             }
         }
     }
