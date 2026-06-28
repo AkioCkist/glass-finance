@@ -14,9 +14,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.outlined.AddCard
-import androidx.compose.material.icons.outlined.ArrowDownward
-import androidx.compose.material.icons.outlined.ArrowUpward
 import androidx.compose.material.icons.outlined.AttachMoney
 import androidx.compose.material.icons.outlined.InsertChartOutlined
 import androidx.compose.material3.Icon
@@ -40,6 +37,11 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.example.data.DebtDirection
 import com.example.ui.theme.*
+
+import com.kyant.backdrop.Backdrop
+import com.kyant.backdrop.drawBackdrop
+import com.kyant.backdrop.effects.blur
+import com.kyant.backdrop.effects.vibrancy
 
 @Composable
 fun TopAppBar(title: String) {
@@ -267,45 +269,74 @@ fun GlassCard(
 
 @Composable
 fun FloatingBottomNav(
-    currentRoute: String,
-    onNavigate: (String) -> Unit
+    currentRouteIndex: Int,
+    backdropState: Backdrop,
+    onNavigate: (Int) -> Unit
 ) {
     Box(
         modifier = Modifier
             .width(320.dp)
             .height(64.dp)
-            .clip(RoundedCornerShape(32.dp))
-            .background(GlassWhite)
-            .border(1.dp, GlassBorder, RoundedCornerShape(32.dp))
-            .padding(horizontal = 16.dp),
-        contentAlignment = Alignment.Center
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-            verticalAlignment = Alignment.CenterVertically
+        LiquidBottomTabs(
+            selectedTabIndex = { currentRouteIndex },
+            onTabSelected = { index -> onNavigate(index) },
+            backdropState = backdropState,
+            tabsCount = 4,
+            modifier = Modifier.fillMaxSize()
         ) {
             NavIcon(
                 icon = Icons.Default.Home,
-                isActive = currentRoute == "overview",
-                onClick = { onNavigate("overview") }
+                isActive = currentRouteIndex == 0,
+                onClick = { onNavigate(0) }
             )
             NavIcon(
                 icon = Icons.Outlined.AttachMoney,
-                isActive = currentRoute == "spend",
-                onClick = { onNavigate("spend") }
+                isActive = currentRouteIndex == 1,
+                onClick = { onNavigate(1) }
             )
             NavIcon(
                 icon = Icons.Outlined.InsertChartOutlined,
-                isActive = currentRoute == "summary",
-                onClick = { onNavigate("summary") }
+                isActive = currentRouteIndex == 2,
+                onClick = { onNavigate(2) }
             )
             NavIcon(
                 icon = Icons.Default.AccountBalanceWallet,
-                isActive = currentRoute == "debt/list",
-                onClick = { onNavigate("debt/list") }
+                isActive = currentRouteIndex == 3,
+                onClick = { onNavigate(3) }
             )
         }
+    }
+}
+
+@Composable
+fun LiquidBottomTabs(
+    selectedTabIndex: () -> Int,
+    onTabSelected: (Int) -> Unit,
+    backdropState: Backdrop,
+    tabsCount: Int,
+    modifier: Modifier = Modifier,
+    content: @Composable RowScope.() -> Unit
+) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(24.dp))
+            .drawBackdrop(
+                backdrop = backdropState,
+                shape = { RoundedCornerShape(24.dp) },
+                effects = {
+                    blur(16.dp.toPx())
+                    vibrancy()
+                }
+            )
+            .border(1.dp, GlassBorder, RoundedCornerShape(24.dp))
+    ) {
+        Row(
+            modifier = Modifier.fillMaxSize(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            content = content
+        )
     }
 }
 
@@ -350,19 +381,12 @@ fun NavIcon(icon: ImageVector, isActive: Boolean, onClick: () -> Unit) {
 
 // ── Numeric Keypad Components ─────────────────────────────────────────────────
 
-/**
- * Format số tiền với dấu phẩy sau mỗi 3 số (VD: 100,000,000)
- */
 fun formatAmountWithCommas(rawAmount: String): String {
     if (rawAmount.isEmpty() || rawAmount == "0") return "0"
     val normalized = rawAmount.trimStart('0').ifEmpty { "0" }
     return normalized.reversed().chunked(3).joinToString(",").reversed()
 }
 
-/**
- * Bàn phím số dùng chung.
- * Nút xóa: bấm thường = xóa 1 ký tự, giữ (long-press) = xóa toàn bộ số đã gõ.
- */
 @Composable
 fun NumericKeypad(
     onNumber: (String) -> Unit,
@@ -441,9 +465,6 @@ private fun KeypadKey(key: String, onClick: () -> Unit) {
     }
 }
 
-/**
- * Nút xóa: tap = xóa 1 số, giữ (long-press) = xóa toàn bộ
- */
 @Composable
 private fun DeleteKey(onDelete: () -> Unit, onDeleteAll: () -> Unit) {
     var isPressed by remember { mutableStateOf(false) }
@@ -478,9 +499,6 @@ private fun DeleteKey(onDelete: () -> Unit, onDeleteAll: () -> Unit) {
     }
 }
 
-/**
- * Dialog popup chứa NumericKeypad để nhập số tiền
- */
 @Composable
 fun KeypadDialog(
     title: String = "Enter Amount",
@@ -508,7 +526,6 @@ fun KeypadDialog(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Display formatted amount
             Text(
                 text = "${formatAmountWithCommas(amount)} VND",
                 style = MaterialTheme.typography.displaySmall,
@@ -541,7 +558,6 @@ fun KeypadDialog(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Buttons
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)

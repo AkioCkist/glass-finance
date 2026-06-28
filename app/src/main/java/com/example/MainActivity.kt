@@ -24,6 +24,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.example.data.DebtPersonRepository
 import com.example.data.DebtRepository
 import com.example.ui.components.FloatingBottomNav
@@ -93,146 +95,187 @@ fun FinanceTrackerApp() {
     }
 
     Box(modifier = Modifier.fillMaxSize().background(AppBackground)) {
+        // Khởi tạo trạng thái Backdrop để xử lý hiệu ứng kính lỏng (Liquid Glassmorphism)
+        val backdropState = rememberLayerBackdrop()
 
-        Scaffold(
-            containerColor = Color.Transparent,
-            modifier = Modifier.fillMaxSize(),
-            bottomBar = {
-                if (!isSubScreen) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 12.dp)
-                            .navigationBarsPadding(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        FloatingBottomNav(
-                            currentRoute = currentRoute,
-                            onNavigate = { route ->
-                                navController.navigate(route) {
-                                    popUpTo(navController.graph.startDestinationId) { saveState = true }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
-                            }
+        // Bọc toàn bộ layout trong thành phần Backdrop của thư viện để phân tích layer nền phía sau
+        Box(
+            modifier = Modifier.fillMaxSize().layerBackdrop(backdropState)
+        ) {
+            Scaffold(
+                containerColor = Color.Transparent,
+                modifier = Modifier.fillMaxSize()
+            ) { innerPadding ->
+                NavHost(
+                    navController = navController,
+                    startDestination = "overview",
+                    modifier = Modifier
+                        .fillMaxSize()
+                        // Chừa khoảng trống bên dưới để nội dung danh sách không bị che bởi thanh điều hướng lơ lửng
+                        .padding(bottom = if (!isSubScreen) 88.dp else 0.dp),
+                    enterTransition = {
+                        val initialIndex = getRouteIndex(initialState.destination.route)
+                        val targetIndex = getRouteIndex(targetState.destination.route)
+                        if (targetIndex > initialIndex) {
+                            slideIntoContainer(
+                                AnimatedContentTransitionScope.SlideDirection.Left,
+                                animationSpec = tween(300)
+                            )
+                        } else {
+                            slideIntoContainer(
+                                AnimatedContentTransitionScope.SlideDirection.Right,
+                                animationSpec = tween(300)
+                            )
+                        }
+                    },
+                    exitTransition = {
+                        val initialIndex = getRouteIndex(initialState.destination.route)
+                        val targetIndex = getRouteIndex(targetState.destination.route)
+                        if (targetIndex > initialIndex) {
+                            slideOutOfContainer(
+                                AnimatedContentTransitionScope.SlideDirection.Left,
+                                animationSpec = tween(300)
+                            )
+                        } else {
+                            slideOutOfContainer(
+                                AnimatedContentTransitionScope.SlideDirection.Right,
+                                animationSpec = tween(300)
+                            )
+                        }
+                    },
+                    popEnterTransition = {
+                        val initialIndex = getRouteIndex(initialState.destination.route)
+                        val targetIndex = getRouteIndex(targetState.destination.route)
+                        if (targetIndex > initialIndex) {
+                            slideIntoContainer(
+                                AnimatedContentTransitionScope.SlideDirection.Left,
+                                animationSpec = tween(300)
+                            )
+                        } else {
+                            slideIntoContainer(
+                                AnimatedContentTransitionScope.SlideDirection.Right,
+                                animationSpec = tween(300)
+                            )
+                        }
+                    },
+                    popExitTransition = {
+                        val initialIndex = getRouteIndex(initialState.destination.route)
+                        val targetIndex = getRouteIndex(targetState.destination.route)
+                        if (targetIndex > initialIndex) {
+                            slideOutOfContainer(
+                                AnimatedContentTransitionScope.SlideDirection.Left,
+                                animationSpec = tween(300)
+                            )
+                        } else {
+                            slideOutOfContainer(
+                                AnimatedContentTransitionScope.SlideDirection.Right,
+                                animationSpec = tween(300)
+                            )
+                        }
+                    }
+                ) {
+                    composable("overview") { OverviewScreen(financeViewModel) }
+                    composable("spend") {
+                        SpendScreen(
+                            financeViewModel,
+                            navController = navController
+                        )
+                    }
+                    composable("summary") { SummaryScreen(financeViewModel) }
+
+                    composable("debt/list") {
+                        DebtListScreen(
+                            viewModel = debtListViewModel,
+                            onNavigateToDetail = { debtId -> navController.navigate("debt/detail/$debtId") },
+                            onNavigateToAdd = { navController.navigate("debt/add") },
+                            onNavigateToPeople = { navController.navigate("debt/people") }
+                        )
+                    }
+
+                    composable(
+                        route = "debt/detail/{debtId}",
+                        arguments = listOf(navArgument("debtId") { type = NavType.LongType })
+                    ) { backStackEntry ->
+                        val debtId =
+                            backStackEntry.arguments?.getLong("debtId") ?: return@composable
+                        val detailViewModel: DebtDetailViewModel = viewModel(
+                            factory = DebtDetailViewModelFactory(debtId, debtRepository)
+                        )
+                        DebtDetailScreen(
+                            viewModel = detailViewModel,
+                            onNavigateBack = { navController.popBackStack() },
+                            onNavigateToEdit = { id -> navController.navigate("debt/edit/$id") }
+                        )
+                    }
+
+                    composable("debt/add") {
+                        DebtAddScreen(
+                            persons = persons.persons,
+                            repository = debtRepository,
+                            personRepository = personRepository,
+                            onSaved = { navController.popBackStack() },
+                            onNavigateBack = { navController.popBackStack() }
+                        )
+                    }
+
+                    composable(
+                        route = "debt/edit/{debtId}",
+                        arguments = listOf(navArgument("debtId") { type = NavType.LongType })
+                    ) { backStackEntry ->
+                        val debtId =
+                            backStackEntry.arguments?.getLong("debtId") ?: return@composable
+                        DebtEditScreen(
+                            debtId = debtId,
+                            persons = persons.persons,
+                            repository = debtRepository,
+                            personRepository = personRepository,
+                            onSaved = { navController.popBackStack() },
+                            onNavigateBack = { navController.popBackStack() }
+                        )
+                    }
+
+                    composable("debt/people") {
+                        DebtPersonScreen(
+                            viewModel = personViewModel,
+                            onNavigateBack = { navController.popBackStack() }
                         )
                     }
                 }
             }
-        ) { innerPadding ->
-            NavHost(
-                navController = navController,
-                startDestination = "overview",
+        }
+
+        // Thanh Bottom Nav lơ lửng được đặt hoàn toàn ĐỘC LẬP bên ngoài Scaffold, nằm đè lên trên nội dung đang cuộn
+        if (!isSubScreen) {
+            Box(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding),
-                enterTransition = {
-                    val initialIndex = getRouteIndex(initialState.destination.route)
-                    val targetIndex = getRouteIndex(targetState.destination.route)
-                    if (targetIndex > initialIndex) {
-                        slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Left, animationSpec = tween(300))
-                    } else {
-                        slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Right, animationSpec = tween(300))
-                    }
-                },
-                exitTransition = {
-                    val initialIndex = getRouteIndex(initialState.destination.route)
-                    val targetIndex = getRouteIndex(targetState.destination.route)
-                    if (targetIndex > initialIndex) {
-                        slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Left, animationSpec = tween(300))
-                    } else {
-                        slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Right, animationSpec = tween(300))
-                    }
-                },
-                popEnterTransition = {
-                    val initialIndex = getRouteIndex(initialState.destination.route)
-                    val targetIndex = getRouteIndex(targetState.destination.route)
-                    if (targetIndex > initialIndex) {
-                        slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Left, animationSpec = tween(300))
-                    } else {
-                        slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Right, animationSpec = tween(300))
-                    }
-                },
-                popExitTransition = {
-                    val initialIndex = getRouteIndex(initialState.destination.route)
-                    val targetIndex = getRouteIndex(targetState.destination.route)
-                    if (targetIndex > initialIndex) {
-                        slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Left, animationSpec = tween(300))
-                    } else {
-                        slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Right, animationSpec = tween(300))
-                    }
-                }
+                    .fillMaxWidth()
+                    .align(Alignment.BottomCenter)
+                    // windowInsetsPadding đảm bảo khoảng cách thanh điều hướng hệ thống (Android gesture line) hoạt động chuẩn
+                    .windowInsetsPadding(WindowInsets.navigationBars)
+                    .padding(bottom = 16.dp),
+                contentAlignment = Alignment.Center
             ) {
-                composable("overview") { OverviewScreen(financeViewModel) }
-                composable("spend") { SpendScreen(financeViewModel, navController = navController) }
-                composable("summary") { SummaryScreen(financeViewModel) }
-
-                // Debt list
-                composable("debt/list") {
-                    DebtListScreen(
-                        viewModel = debtListViewModel,
-                        onNavigateToDetail = { debtId ->
-                            navController.navigate("debt/detail/$debtId")
-                        },
-                        onNavigateToAdd = {
-                            navController.navigate("debt/add")
-                        },
-                        onNavigateToPeople = {
-                            navController.navigate("debt/people")
+                val routeIndex = getRouteIndex(currentRoute)
+                FloatingBottomNav(
+                    currentRouteIndex = routeIndex,
+                    backdropState = backdropState, // Truyền trạng thái backdrop vào để đồng bộ hiệu ứng chuyển tab dạng lỏng
+                    onNavigate = { index ->
+                        val targetRoute = when (index) {
+                            0 -> "overview"
+                            1 -> "spend"
+                            2 -> "summary"
+                            3 -> "debt/list"
+                            else -> "overview"
                         }
-                    )
-                }
-
-                // Debt detail
-                composable(
-                    route = "debt/detail/{debtId}",
-                    arguments = listOf(navArgument("debtId") { type = NavType.LongType })
-                ) { backStackEntry ->
-                    val debtId = backStackEntry.arguments?.getLong("debtId") ?: return@composable
-                    val detailViewModel: DebtDetailViewModel = viewModel(
-                        factory = DebtDetailViewModelFactory(debtId, debtRepository)
-                    )
-                    DebtDetailScreen(
-                        viewModel = detailViewModel,
-                        onNavigateBack = { navController.popBackStack() },
-                        onNavigateToEdit = { id -> navController.navigate("debt/edit/$id") }
-                    )
-                }
-
-                // Add debt
-                composable("debt/add") {
-                    DebtAddScreen(
-                        persons = persons.persons,
-                        repository = debtRepository,
-                        personRepository = personRepository,
-                        onSaved = { navController.popBackStack() },
-                        onNavigateBack = { navController.popBackStack() }
-                    )
-                }
-
-                // Edit debt
-                composable(
-                    route = "debt/edit/{debtId}",
-                    arguments = listOf(navArgument("debtId") { type = NavType.LongType })
-                ) { backStackEntry ->
-                    val debtId = backStackEntry.arguments?.getLong("debtId") ?: return@composable
-                    DebtEditScreen(
-                        debtId = debtId,
-                        persons = persons.persons,
-                        repository = debtRepository,
-                        personRepository = personRepository,
-                        onSaved = { navController.popBackStack() },
-                        onNavigateBack = { navController.popBackStack() }
-                    )
-                }
-
-                // People management
-                composable("debt/people") {
-                    DebtPersonScreen(
-                        viewModel = personViewModel,
-                        onNavigateBack = { navController.popBackStack() }
-                    )
-                }
+                        if (currentRoute != targetRoute) {
+                            navController.navigate(targetRoute) {
+                                popUpTo(navController.graph.startDestinationId) { saveState = true }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
+                        }
+                    }
+                )
             }
         }
     }

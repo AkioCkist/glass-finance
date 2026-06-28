@@ -19,9 +19,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -61,19 +63,26 @@ fun OverviewScreen(viewModel: FinanceViewModel) {
             verticalArrangement = Arrangement.spacedBy(16.dp),
             contentPadding = PaddingValues(bottom = 80.dp)
         ) {
-            // ── DISTRIBUTION DONUT CHART ──
+            // ── DISTRIBUTION BLEND CHART ──
             if (totalBalance > 0 && activeSources.isNotEmpty()) {
                 item {
                     Column(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        DistributionDonutChart(
+                        CircularBlendChart(
                             sources = activeSources,
                             total = totalBalance,
                             fmt = fmt
                         )
                     }
+                }
+                item {
+                    BlendChartBreakdown(
+                        sources = activeSources,
+                        total = totalBalance,
+                        fmt = fmt
+                    )
                 }
             }
 
@@ -149,77 +158,188 @@ private fun DebtSummaryCard(
     summary: DebtSummary,
     fmt: NumberFormat
 ) {
+    val net = summary.owedToMe - summary.iOwe
+    val total = summary.owedToMe + summary.iOwe
+    val owedRatio = if (total > 0) (summary.owedToMe / total).toFloat() else 0.5f
+
     GlassCard(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
+            // Header with title and net badge
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
                     Box(
-                        modifier = Modifier.size(36.dp).clip(CircleShape).background(GainGreen.copy(alpha = 0.12f)),
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(TextPrimary.copy(alpha = 0.08f)),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             Icons.Default.AccountBalanceWallet,
                             contentDescription = null,
-                            tint = GainGreen,
+                            tint = TextPrimary,
                             modifier = Modifier.size(20.dp)
                         )
                     }
-                    Column {
-                        Text("Owed to me", style = Typography.bodyMedium, color = TextSecondary)
-                        Text("${fmt.format(summary.owedToMe)} VND", style = Typography.bodyLarge, fontWeight = FontWeight.Bold, color = GainGreen)
-                    }
+                    Text(
+                        "Debt Overview",
+                        style = Typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = TextPrimary
+                    )
                 }
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Box(
-                        modifier = Modifier.size(36.dp).clip(CircleShape).background(ExpenseRed.copy(alpha = 0.12f)),
-                        contentAlignment = Alignment.Center
+
+                // Net balance badge
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(
+                            if (net >= 0) GainGreen.copy(alpha = 0.12f)
+                            else ExpenseRed.copy(alpha = 0.12f)
+                        )
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         Icon(
-                            Icons.Default.SwapHoriz,
+                            if (net >= 0) Icons.Default.TrendingUp else Icons.Default.TrendingDown,
                             contentDescription = null,
-                            tint = ExpenseRed,
-                            modifier = Modifier.size(20.dp)
+                            tint = if (net >= 0) GainGreen else ExpenseRed,
+                            modifier = Modifier.size(14.dp)
                         )
-                    }
-                    Column(horizontalAlignment = Alignment.End) {
-                        Text("I owe", style = Typography.bodyMedium, color = TextSecondary)
-                        Text("${fmt.format(summary.iOwe)} VND", style = Typography.bodyLarge, fontWeight = FontWeight.Bold, color = ExpenseRed)
+                        Text(
+                            "${fmt.format(net)}",
+                            style = Typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = if (net >= 0) GainGreen else ExpenseRed
+                        )
                     }
                 }
             }
-            HorizontalDivider(color = GlassBorder, thickness = 1.dp)
+
+            // Ratio bar - visual split between owed/owing
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(6.dp)
+                    .clip(RoundedCornerShape(3.dp))
+                    .background(GlassBorder.copy(alpha = 0.3f))
+            ) {
+                Row(modifier = Modifier.fillMaxSize()) {
+                    Box(
+                        modifier = Modifier
+                            .weight(owedRatio.coerceAtLeast(0.001f))
+                            .fillMaxHeight()
+                            .background(GainGreen)
+                    )
+                    Box(
+                        modifier = Modifier
+                            .weight((1f - owedRatio).coerceAtLeast(0.001f))
+                            .fillMaxHeight()
+                            .background(ExpenseRed)
+                    )
+                }
+            }
+
+            // Amounts section
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text("Net", style = Typography.bodyLarge, fontWeight = FontWeight.SemiBold, color = TextPrimary)
-                val net = summary.owedToMe - summary.iOwe
-                Text(
-                    "${fmt.format(net)} VND",
-                    style = Typography.bodyLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = if (net >= 0) GainGreen else ExpenseRed
+                DebtAmountItem(
+                    label = "Owed to me",
+                    amount = fmt.format(summary.owedToMe),
+                    currency = "VND",
+                    color = GainGreen,
+                    icon = Icons.Default.CallReceived,
+                    modifier = Modifier.weight(1f)
+                )
+
+                Spacer(modifier = Modifier.width(16.dp))
+
+                DebtAmountItem(
+                    label = "I owe",
+                    amount = fmt.format(summary.iOwe),
+                    currency = "VND",
+                    color = ExpenseRed,
+                    icon = Icons.Default.CallMade,
+                    modifier = Modifier.weight(1f),
+                    alignEnd = true
                 )
             }
         }
     }
 }
 
-// ── Distribution Donut Chart ────────────────────────────────────────────────
+@Composable
+private fun DebtAmountItem(
+    label: String,
+    amount: String,
+    currency: String,
+    color: Color,
+    icon: ImageVector,
+    modifier: Modifier = Modifier,
+    alignEnd: Boolean = false
+) {
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+        horizontalAlignment = if (alignEnd) Alignment.End else Alignment.Start
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Icon(
+                icon,
+                contentDescription = null,
+                tint = color,
+                modifier = Modifier.size(16.dp)
+            )
+            Text(
+                label,
+                style = Typography.bodySmall,
+                color = TextSecondary
+            )
+        }
+        Text(
+            amount,
+            style = Typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            color = color
+        )
+        Text(
+            currency,
+            style = Typography.bodySmall,
+            fontWeight = FontWeight.Bold,
+            color = TextSecondary
+        )
+    }
+}
 
-private const val DONUT_THICKNESS = 0.28f // fraction of radius
+// ── Circular Blend Chart ─────────────────────────────────────────────────────
+// A filled circle split into N proportional segments (one per money source),
+// blended smoothly at each boundary via a multi-stop sweepGradient — no real
+// blur needed, so it renders identically on every Android version.
+
+private const val BLEND_RING_WIDTH = 2.5f // outer ring stroke, in dp
 
 @Composable
-private fun DistributionDonutChart(
+private fun CircularBlendChart(
     sources: List<MoneySource>,
     total: Double,
     fmt: NumberFormat
@@ -232,110 +352,162 @@ private fun DistributionDonutChart(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                "Asset Distribution",
-                style = Typography.bodyLarge,
-                fontWeight = FontWeight.SemiBold,
-                color = TextPrimary
+                fmt.format(total),
+                style = Typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = TextPrimary,
+                textAlign = TextAlign.Center
             )
-            Spacer(modifier = Modifier.height(20.dp))
+            Text(
+                "Total balance",
+                style = Typography.labelMedium,
+                color = TextSecondary
+            )
+            Spacer(modifier = Modifier.height(24.dp))
 
-            // Donut
+            val sorted = remember(sources) { sources.sortedByDescending { it.balance } }
+            val fractions = remember(sorted, total) {
+                sorted.map { (it.balance / total).toFloat() }
+            }
+
+            // Gap angle between segments (in degrees)
+            val gapAngle = 8f
+
             Box(
-                modifier = Modifier.size(180.dp),
+                modifier = Modifier.size(200.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Canvas(modifier = Modifier.fillMaxSize()) {
-                    val strokeWidth = size.minDimension * DONUT_THICKNESS
-                    val arcSize = Size(
-                        size.width - strokeWidth,
-                        size.height - strokeWidth
-                    )
-                    val topLeft = Offset(strokeWidth / 2f, strokeWidth / 2f)
-                    var startAngle = -90f
+                    val strokeWidth = 24.dp.toPx()
+                    val radius = size.minDimension / 2f
+                    val center = Offset(size.width / 2f, size.height / 2f)
+                    val colors = sorted.map { colorForType(it.type) }
 
-                    sources.forEach { source ->
-                        val sweep = (source.balance / total * 360f).toFloat()
-                        drawArc(
-                            color = colorForType(source.type),
-                            startAngle = startAngle,
-                            sweepAngle = sweep,
-                            useCenter = false,
-                            topLeft = topLeft,
-                            size = arcSize,
-                            style = Stroke(width = strokeWidth, cap = androidx.compose.ui.graphics.StrokeCap.Butt)
-                        )
-                        startAngle += sweep
+                    var currentAngle = -90f // Start from top
+
+                    sorted.forEachIndexed { index, source ->
+                        val sweepAngle = fractions[index] * 360f - gapAngle
+
+                        if (sweepAngle > 0) {
+                            // Draw the arc segment
+                            drawArc(
+                                color = colors[index],
+                                startAngle = currentAngle,
+                                sweepAngle = sweepAngle,
+                                useCenter = false,
+                                style = Stroke(
+                                    width = strokeWidth,
+                                    cap = StrokeCap.Round
+                                )
+                            )
+                        }
+
+                        // Move to next segment position
+                        currentAngle += fractions[index] * 360f
                     }
+
+                    // Optional: Draw inner circle for glassy effect
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(BackgroundColorForBlendCore, Color.Transparent),
+                            center = center,
+                            radius = radius * 0.62f
+                        ),
+                        radius = radius - strokeWidth / 2,
+                        center = center
+                    )
                 }
-                // Center text
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+
+                // Center content
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
                     Text(
-                        fmt.format(total),
+                        text = fmt.format(total),
                         style = Typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                         color = TextPrimary
                     )
                     Text(
-                        "VND",
+                        text = "Total balance",
                         style = Typography.labelMedium,
                         color = TextSecondary
                     )
                 }
             }
+        }
+    }
+}
 
-            Spacer(modifier = Modifier.height(20.dp))
+// Reads as near-white on the light theme's card background, giving the
+// chart's center a soft glassy falloff without introducing a new surface
+// color into the design system.
+private val BackgroundColorForBlendCore: Color
+    get() = com.example.ui.theme.AppBackground
 
-            // Legend
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                val leftCol = sources.take((sources.size + 1) / 2)
-                val rightCol = sources.drop((sources.size + 1) / 2)
+@Composable
+private fun BlendChartBreakdown(
+    sources: List<MoneySource>,
+    total: Double,
+    fmt: NumberFormat
+) {
+    GlassCard(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            val sorted = sources.sortedByDescending { it.balance }
+            sorted.forEachIndexed { index, source ->
+                val accent = colorForType(source.type)
+                val pct = (source.balance / total * 100).toInt()
 
-                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    leftCol.forEach { source ->
-                        val pct = (source.balance / total * 100).toInt()
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(8.dp)
-                                    .clip(CircleShape)
-                                    .background(colorForType(source.type))
-                            )
-                            Text(
-                                "${source.name} $pct%",
-                                style = Typography.labelMedium,
-                                color = TextSecondary,
-                                maxLines = 1
-                            )
-                        }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(accent),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            iconForType(source.type),
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                    Text(
+                        source.name,
+                        style = Typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                        color = TextPrimary,
+                        maxLines = 1,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(
+                            "${fmt.format(source.balance)} VND",
+                            style = Typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = TextPrimary,
+                            maxLines = 1
+                        )
+                        Text(
+                            "$pct%",
+                            style = Typography.labelMedium,
+                            color = TextSecondary
+                        )
                     }
                 }
-                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    rightCol.forEach { source ->
-                        val pct = (source.balance / total * 100).toInt()
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(8.dp)
-                                    .clip(CircleShape)
-                                    .background(colorForType(source.type))
-                            )
-                            Text(
-                                "${source.name} $pct%",
-                                style = Typography.labelMedium,
-                                color = TextSecondary,
-                                maxLines = 1
-                            )
-                        }
-                    }
+                if (index != sorted.lastIndex) {
+                    HorizontalDivider(
+                        color = GlassBorder,
+                        thickness = 1.dp,
+                        modifier = Modifier.padding(horizontal = 20.dp)
+                    )
                 }
             }
         }

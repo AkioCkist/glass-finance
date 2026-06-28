@@ -2,7 +2,6 @@ package com.example.ui.screens
 
 import androidx.navigation.NavController
 import android.annotation.SuppressLint
-import kotlinx.coroutines.delay
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
@@ -21,12 +20,12 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
@@ -37,7 +36,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -46,10 +44,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -331,14 +329,14 @@ private fun SourcePickerDialog(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(28.dp))
-                .background(com.example.ui.theme.AppBackground)
+                .background(Color.White)
                 .padding(24.dp)
         ) {
             Text(
                 "Select Wallet",
                 style = Typography.titleLarge,
-                fontWeight = FontWeight.SemiBold,
-                color = TextPrimary
+                fontWeight = FontWeight.Bold,
+                color = Color.Black
             )
             Spacer(modifier = Modifier.height(20.dp))
 
@@ -346,7 +344,7 @@ private fun SourcePickerDialog(
                 Text(
                     "No money sources available",
                     style = Typography.bodyMedium,
-                    color = TextSecondary,
+                    color = Color.Gray,
                     modifier = Modifier.padding(vertical = 16.dp)
                 )
             } else {
@@ -355,22 +353,24 @@ private fun SourcePickerDialog(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(14.dp))
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(Color(0xFFF7F7F7))
                             .clickable(
                                 interactionSource = remember { MutableInteractionSource() },
                                 indication = null
                             ) { onSelect(source) }
-                            .padding(vertical = 10.dp, horizontal = 4.dp)
+                            .padding(vertical = 12.dp, horizontal = 14.dp)
                     ) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(14.dp)
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
+                            // Icon
                             Box(
                                 modifier = Modifier
                                     .size(40.dp)
-                                    .clip(androidx.compose.foundation.shape.CircleShape)
+                                    .clip(CircleShape)
                                     .background(accent.copy(alpha = 0.12f)),
                                 contentAlignment = Alignment.Center
                             ) {
@@ -378,42 +378,48 @@ private fun SourcePickerDialog(
                                     iconForType(source.type),
                                     contentDescription = null,
                                     tint = accent,
-                                    modifier = Modifier.size(22.dp)
+                                    modifier = Modifier.size(20.dp)
                                 )
                             }
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    source.name,
-                                    style = Typography.bodyLarge,
-                                    fontWeight = FontWeight.Medium,
-                                    color = TextPrimary
-                                )
-                                Text(
-                                    source.type.label,
-                                    style = Typography.labelMedium,
-                                    color = TextSecondary
-                                )
-                            }
+
+                            // Name — takes remaining space, truncates if too long
                             Text(
-                                "${java.text.NumberFormat.getNumberInstance(java.util.Locale.US).format(source.balance)} VND",
+                                source.name,
+                                style = Typography.bodyLarge,
+                                fontWeight = FontWeight.Medium,
+                                color = Color.Black,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f)
+                            )
+
+                            // Amount — fixed-priority, shrinks font if needed, never wraps
+                            Text(
+                                text = "${formatVnd(source.balance)} VND",
                                 style = Typography.bodyMedium,
-                                fontWeight = FontWeight.SemiBold,
-                                color = TextPrimary
+                                fontWeight = FontWeight.Bold,
+                                color = Color.Black,
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = TextOverflow.Visible,
+                                modifier = Modifier
+                                    .widthIn(max = 140.dp)
+                                    .basicMarquee(iterations = 0) // optional: remove if not desired
                             )
                         }
                     }
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
                 }
             }
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Cancel
+            // Cancel button
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(16.dp))
-                    .background(GlassBorder)
+                    .background(Color.Black)
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null
@@ -424,11 +430,20 @@ private fun SourcePickerDialog(
                 Text(
                     "Cancel",
                     style = Typography.bodyLarge,
-                    fontWeight = FontWeight.Medium,
-                    color = TextSecondary
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
                 )
             }
         }
+    }
+}
+
+// Helper: shortens long numbers (e.g. 1,234,567 -> 1.23M) to avoid layout break
+private fun formatVnd(amount: Double): String {
+    return when {
+        amount >= 1_000_000_000 -> "%.2fB".format(amount / 1_000_000_000.0)
+        amount >= 1_000_000 -> "%.2fM".format(amount / 1_000_000.0)
+        else -> java.text.NumberFormat.getNumberInstance(java.util.Locale.US).format(amount)
     }
 }
 
