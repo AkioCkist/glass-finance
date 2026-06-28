@@ -160,7 +160,7 @@ fun FinanceTrackerApp() {
                 }
             ) {
                 composable("overview") { OverviewScreen(financeViewModel) }
-                composable("spend") { SpendScreen(financeViewModel) }
+                composable("spend") { SpendScreen(financeViewModel, navController = navController) }
                 composable("summary") { SummaryScreen(financeViewModel) }
 
                 // Debt list

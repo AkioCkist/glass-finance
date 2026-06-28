@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import androidx.navigation.NavController
 import android.annotation.SuppressLint
 import kotlinx.coroutines.delay
 import androidx.compose.animation.AnimatedContent
@@ -67,7 +68,8 @@ private val NoteSuggestions = listOf(
 )
 
 @Composable
-fun SpendScreen(viewModel: FinanceViewModel) {
+fun SpendScreen(viewModel: FinanceViewModel,
+                navController: NavController) {
     var amount by remember { mutableStateOf("0") }
     var isIncome by remember { mutableStateOf(false) }
     var note by remember { mutableStateOf("") }
@@ -140,6 +142,16 @@ fun SpendScreen(viewModel: FinanceViewModel) {
                         amount = "0"
                         note = ""
                         isNoteFocused = false
+
+                        // ✅ SỬ DỤNG KHỐI LỆNH NÀY ĐỂ CHUYỂN TAB GIỐNG BOTTOM NAV
+                        navController.navigate("summary") {
+                            // Pop về đúng start destination (overview) để tránh chồng nhiều màn hình
+                            popUpTo(navController.graph.startDestinationId) { saveState = true }
+                            // Chỉ giữ 1 instance của màn hình summary trên đỉnh stack
+                            launchSingleTop = true
+                            // Khôi phục trạng thái cũ của màn hình summary nếu đã từng vào
+                            restoreState = true
+                        }
                     }
                 },
             contentAlignment = Alignment.Center
