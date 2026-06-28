@@ -74,27 +74,6 @@ fun SummaryScreen(viewModel: FinanceViewModel) {
             contentPadding = PaddingValues(bottom = 80.dp)
         ) {
 
-            // ── TOTAL BALANCE ──
-            item {
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(
-                        "Total Balance",
-                        style = Typography.labelMedium,
-                        color = TextSecondary
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "VND ${fmt.format(totalBalance)}",
-                        style = Typography.displayLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = TextPrimary
-                    )
-                }
-            }
-
             // ── INCOME / SPEND STATS ──
             item {
                 Row(

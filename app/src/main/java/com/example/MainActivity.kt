@@ -55,15 +55,17 @@ fun FinanceTrackerApp() {
     val application = context.applicationContext as FinanceApplication
     val database = application.database
 
-    // Main finance VM
-    val financeViewModel: FinanceViewModel = viewModel(
-        factory = FinanceViewModelFactory(database.transactionDao(),
-         moneySourceDao = database.moneySourceDao()
-        )
-    )
-
     // Debt repositories
     val debtRepository = remember { DebtRepository(database.debtDao(), database.debtTransactionDao(), database.transactionDao()) }
+
+    // Main finance VM
+    val financeViewModel: FinanceViewModel = viewModel(
+        factory = FinanceViewModelFactory(
+            transactionDao = database.transactionDao(),
+            moneySourceDao = database.moneySourceDao(),
+            debtRepository = debtRepository
+        )
+    )
     val personRepository = remember { DebtPersonRepository(database.debtPersonDao()) }
 
     // Debt ViewModels

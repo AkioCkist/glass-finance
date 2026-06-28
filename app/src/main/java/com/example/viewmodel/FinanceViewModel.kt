@@ -5,6 +5,9 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.data.MoneySource
 import com.example.data.MoneySourceDao
+import com.example.data.DebtDirection
+import com.example.data.DebtRepository
+import com.example.data.DebtStatus
 import com.example.data.MoneySourceType
 import com.example.data.Transaction
 import com.example.data.TransactionDao
@@ -17,9 +20,11 @@ import java.util.Calendar
 
 enum class ChartPeriod { DAY, WEEK, MONTH, YEAR }
 
-class FinanceViewModel(private val transactionDao: TransactionDao,
-                       private val moneySourceDao: MoneySourceDao
-    ) : ViewModel() {
+class FinanceViewModel(
+    private val transactionDao: TransactionDao,
+    private val moneySourceDao: MoneySourceDao,
+    private val debtRepository: DebtRepository
+) : ViewModel() {
 
     // Seed default money sources on first launch
     init {
@@ -63,6 +68,14 @@ class FinanceViewModel(private val transactionDao: TransactionDao,
     val activeMoneySources: StateFlow<List<MoneySource>> = moneySources.map { list ->
         list.filter { it.balance > 0 }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    // ── Debt Summary ─────────────────────────────────────────────────────────
+    val debtSummary: StateFlow<DebtSummary> = debtRepository.getAllDebtsWithPerson().map { debts ->
+        val active = debts.filter { it.debt.status == DebtStatus.ACTIVE || it.debt.status == DebtStatus.OVERDUE }
+        val owedToMe = active.filter { it.debt.direction == DebtDirection.OWED_TO_ME }.sumOf { it.debt.originalAmount }
+        val iOwe = active.filter { it.debt.direction == DebtDirection.I_OWE }.sumOf { it.debt.originalAmount }
+        DebtSummary(owedToMe = owedToMe, iOwe = iOwe)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DebtSummary())
 
     val monthlyIncome: StateFlow<Double> = transactions.map { list ->
         val cal = Calendar.getInstance()
@@ -204,14 +217,20 @@ data class ChartBar(val label: String, val income: Double, val spend: Double) {
     val total get() = income + spend
 }
 
+data class DebtSummary(
+    val owedToMe: Double = 0.0,
+    val iOwe: Double = 0.0
+)
+
 class FinanceViewModelFactory(
     private val transactionDao: TransactionDao,
-    private val moneySourceDao: MoneySourceDao
+    private val moneySourceDao: MoneySourceDao,
+    private val debtRepository: DebtRepository
 ) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(FinanceViewModel::class.java)) {
             @Suppress("UNCHECKED_CAST")
-            return FinanceViewModel(transactionDao, moneySourceDao) as T
+            return FinanceViewModel(transactionDao, moneySourceDao, debtRepository) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")
     }

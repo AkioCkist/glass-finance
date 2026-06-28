@@ -8,6 +8,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -30,6 +31,7 @@ import com.example.data.MoneySource
 import com.example.data.MoneySourceType
 import com.example.ui.components.*
 import com.example.ui.theme.*
+import com.example.viewmodel.DebtSummary
 import com.example.viewmodel.FinanceViewModel
 import java.text.NumberFormat
 import java.util.Locale
@@ -38,6 +40,7 @@ import java.util.Locale
 fun OverviewScreen(viewModel: FinanceViewModel) {
     val totalBalance by viewModel.totalBalance.collectAsState()
     val activeSources by viewModel.activeMoneySources.collectAsState()
+    val debtSummary by viewModel.debtSummary.collectAsState()
 
     val fmt = NumberFormat.getNumberInstance(Locale.US)
     val formattedBalance = fmt.format(totalBalance)
@@ -121,6 +124,91 @@ fun OverviewScreen(viewModel: FinanceViewModel) {
                         )
                     }
                 }
+            }
+
+            // ── DEBT SUMMARY ──
+            if (debtSummary.owedToMe > 0 || debtSummary.iOwe > 0) {
+                item {
+                    Text(
+                        "Debt Summary",
+                        style = Typography.bodyLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        color = TextPrimary
+                    )
+                }
+                item {
+                    DebtSummaryCard(summary = debtSummary, fmt = fmt)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DebtSummaryCard(
+    summary: DebtSummary,
+    fmt: NumberFormat
+) {
+    GlassCard(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Box(
+                        modifier = Modifier.size(36.dp).clip(CircleShape).background(GainGreen.copy(alpha = 0.12f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Default.AccountBalanceWallet,
+                            contentDescription = null,
+                            tint = GainGreen,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Column {
+                        Text("Owed to me", style = Typography.bodyMedium, color = TextSecondary)
+                        Text("${fmt.format(summary.owedToMe)} VND", style = Typography.bodyLarge, fontWeight = FontWeight.Bold, color = GainGreen)
+                    }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Box(
+                        modifier = Modifier.size(36.dp).clip(CircleShape).background(ExpenseRed.copy(alpha = 0.12f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Default.SwapHoriz,
+                            contentDescription = null,
+                            tint = ExpenseRed,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text("I owe", style = Typography.bodyMedium, color = TextSecondary)
+                        Text("${fmt.format(summary.iOwe)} VND", style = Typography.bodyLarge, fontWeight = FontWeight.Bold, color = ExpenseRed)
+                    }
+                }
+            }
+            HorizontalDivider(color = GlassBorder, thickness = 1.dp)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text("Net", style = Typography.bodyLarge, fontWeight = FontWeight.SemiBold, color = TextPrimary)
+                val net = summary.owedToMe - summary.iOwe
+                Text(
+                    "${fmt.format(net)} VND",
+                    style = Typography.bodyLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = if (net >= 0) GainGreen else ExpenseRed
+                )
             }
         }
     }

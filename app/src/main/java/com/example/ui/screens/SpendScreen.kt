@@ -85,6 +85,13 @@ fun SpendScreen(viewModel: FinanceViewModel,
     var selectedSource by remember { mutableStateOf<MoneySource?>(null) }
     var showSourcePicker by remember { mutableStateOf(false) }
 
+    // Auto-select Cash as default when sources load
+    LaunchedEffect(moneySources) {
+        if (selectedSource == null) {
+            selectedSource = moneySources.find { it.type == MoneySourceType.CASH }
+        }
+    }
+
     val signColor by animateColorAsState(
         targetValue = if (isIncome) AmountIncomeColor else AmountSpendColor,
         animationSpec = tween(durationMillis = 250),
