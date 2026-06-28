@@ -30,7 +30,9 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Backspace
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -43,14 +45,16 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.material3.*
-import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.window.Dialog
+import com.example.data.MoneySource
+import com.example.data.MoneySourceType
 import com.example.ui.components.*
 import com.example.ui.theme.*
 import com.example.viewmodel.FinanceViewModel
@@ -77,6 +81,10 @@ fun SpendScreen(viewModel: FinanceViewModel,
     val coroutineScope = rememberCoroutineScope()
     val shakeOffset = remember { Animatable(0f) }
 
+    val moneySources by viewModel.moneySources.collectAsState()
+    var selectedSource by remember { mutableStateOf<MoneySource?>(null) }
+    var showSourcePicker by remember { mutableStateOf(false) }
+
     val signColor by animateColorAsState(
         targetValue = if (isIncome) AmountIncomeColor else AmountSpendColor,
         animationSpec = tween(durationMillis = 250),
@@ -86,7 +94,6 @@ fun SpendScreen(viewModel: FinanceViewModel,
     Column(
         modifier = Modifier
             .fillMaxSize()
-            // ✅ GIẢM PADDING NGANG TỪ 24.dp XUỐNG 16.dp ĐỂ TĂNG KHÔNG GIAN HIỂN THỊ CHO AMOUNT ENTRY
             .padding(horizontal = 16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -109,7 +116,74 @@ fun SpendScreen(viewModel: FinanceViewModel,
         }
 
         Spacer(modifier = Modifier.height(12.dp))
-        Text("From Wallet", style = Typography.bodyLarge, color = TextSecondary)
+
+        // ── From Wallet — clickable source picker ──
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(14.dp))
+                .background(GlassWhite)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null
+                ) { showSourcePicker = true }
+                .padding(horizontal = 16.dp, vertical = 12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    if (selectedSource != null) {
+                        val accent = colorForType(selectedSource!!.type)
+                        Box(
+                            modifier = Modifier
+                                .size(28.dp)
+                                .clip(androidx.compose.foundation.shape.CircleShape)
+                                .background(accent.copy(alpha = 0.12f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                iconForType(selectedSource!!.type),
+                                contentDescription = null,
+                                tint = accent,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .size(28.dp)
+                                .clip(androidx.compose.foundation.shape.CircleShape)
+                                .background(GlassBorder),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Default.AccountBalanceWallet,
+                                contentDescription = null,
+                                tint = TextSecondary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+                    Text(
+                        text = selectedSource?.name ?: "From Wallet",
+                        style = Typography.bodyLarge,
+                        color = if (selectedSource != null) TextPrimary else TextSecondary,
+                        fontWeight = if (selectedSource != null) FontWeight.Medium else FontWeight.Normal
+                    )
+                }
+                Icon(
+                    Icons.Default.ChevronRight,
+                    contentDescription = null,
+                    tint = TextSecondary,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
 
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -138,18 +212,20 @@ fun SpendScreen(viewModel: FinanceViewModel,
                     val parsedAmount = amount.toDoubleOrNull() ?: 0.0
                     if (parsedAmount > 0) {
                         val finalNote = if (note.isNotBlank()) note else if (isIncome) "New Income" else "New Spend"
-                        viewModel.addTransaction(parsedAmount, finalNote, isIncome = isIncome)
+                        viewModel.addTransaction(
+                            amount = parsedAmount,
+                            note = finalNote,
+                            isIncome = isIncome,
+                            moneySourceId = selectedSource?.id
+                        )
                         amount = "0"
                         note = ""
                         isNoteFocused = false
+                        selectedSource = null
 
-                        // ✅ SỬ DỤNG KHỐI LỆNH NÀY ĐỂ CHUYỂN TAB GIỐNG BOTTOM NAV
                         navController.navigate("summary") {
-                            // Pop về đúng start destination (overview) để tránh chồng nhiều màn hình
                             popUpTo(navController.graph.startDestinationId) { saveState = true }
-                            // Chỉ giữ 1 instance của màn hình summary trên đỉnh stack
                             launchSingleTop = true
-                            // Khôi phục trạng thái cũ của màn hình summary nếu đã từng vào
                             restoreState = true
                         }
                     }
@@ -199,9 +275,159 @@ fun SpendScreen(viewModel: FinanceViewModel,
         )
         Spacer(modifier = Modifier.height(64.dp))
     }
+
+    // ── Source picker dialog ──
+    if (showSourcePicker) {
+        SourcePickerDialog(
+            sources = moneySources,
+            onSelect = { source ->
+                selectedSource = source
+                showSourcePicker = false
+            },
+            onDismiss = { showSourcePicker = false }
+        )
+    }
 }
 
-// --- CÁC COMPONENT CON ---
+// ══════════════════════════════════════════════════════════════════════════════
+//  SOURCE PICKER DIALOG
+// ══════════════════════════════════════════════════════════════════════════════
+
+private fun iconForType(type: MoneySourceType): ImageVector = when (type) {
+    MoneySourceType.CASH        -> Icons.Default.AccountBalanceWallet
+    MoneySourceType.CHECKING    -> Icons.Default.AccountBalance
+    MoneySourceType.SAVINGS     -> Icons.Default.Savings
+    MoneySourceType.INVESTMENT  -> Icons.Default.TrendingUp
+    MoneySourceType.CREDIT_CARD -> Icons.Default.CreditCard
+    MoneySourceType.E_WALLET    -> Icons.Default.Phone
+    MoneySourceType.OTHER       -> Icons.Default.MoreHoriz
+}
+
+private fun colorForType(type: MoneySourceType): Color = when (type) {
+    MoneySourceType.CASH        -> Color(0xFF34C759)
+    MoneySourceType.CHECKING    -> Color(0xFF007AFF)
+    MoneySourceType.SAVINGS     -> Color(0xFFAF52DE)
+    MoneySourceType.INVESTMENT  -> Color(0xFFFF9500)
+    MoneySourceType.CREDIT_CARD -> Color(0xFFFF3B30)
+    MoneySourceType.E_WALLET    -> Color(0xFF5AC8FA)
+    MoneySourceType.OTHER       -> TextSecondary
+}
+
+@Composable
+private fun SourcePickerDialog(
+    sources: List<MoneySource>,
+    onSelect: (MoneySource) -> Unit,
+    onDismiss: () -> Unit
+) {
+    Dialog(onDismissRequest = { onDismiss() }) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(28.dp))
+                .background(com.example.ui.theme.AppBackground)
+                .padding(24.dp)
+        ) {
+            Text(
+                "Select Wallet",
+                style = Typography.titleLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = TextPrimary
+            )
+            Spacer(modifier = Modifier.height(20.dp))
+
+            if (sources.isEmpty()) {
+                Text(
+                    "No money sources available",
+                    style = Typography.bodyMedium,
+                    color = TextSecondary,
+                    modifier = Modifier.padding(vertical = 16.dp)
+                )
+            } else {
+                sources.forEach { source ->
+                    val accent = colorForType(source.type)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null
+                            ) { onSelect(source) }
+                            .padding(vertical = 10.dp, horizontal = 4.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(14.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(androidx.compose.foundation.shape.CircleShape)
+                                    .background(accent.copy(alpha = 0.12f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    iconForType(source.type),
+                                    contentDescription = null,
+                                    tint = accent,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    source.name,
+                                    style = Typography.bodyLarge,
+                                    fontWeight = FontWeight.Medium,
+                                    color = TextPrimary
+                                )
+                                Text(
+                                    source.type.label,
+                                    style = Typography.labelMedium,
+                                    color = TextSecondary
+                                )
+                            }
+                            Text(
+                                "${java.text.NumberFormat.getNumberInstance(java.util.Locale.US).format(source.balance)} VND",
+                                style = Typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = TextPrimary
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Cancel
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(GlassBorder)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) { onDismiss() }
+                    .padding(vertical = 14.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    "Cancel",
+                    style = Typography.bodyLarge,
+                    fontWeight = FontWeight.Medium,
+                    color = TextSecondary
+                )
+            }
+        }
+    }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  ORIGINAL COMPONENTS (unchanged)
+// ══════════════════════════════════════════════════════════════════════════════
 
 /**
  * Toggle Spend / Income dạng "viên thuốc" (pill) trượt mượt theo lựa chọn (spring bouncy),
@@ -222,7 +448,6 @@ private fun SpendIncomeToggle(
     ) {
         val halfWidth = maxWidth / 2
 
-        // Vị trí pill trượt mượt giữa 2 nửa, hơi nảy (bold) cho cảm giác rõ rệt
         val pillOffset by animateDpAsState(
             targetValue = if (isIncome) halfWidth else 0.dp,
             animationSpec = spring(
@@ -231,7 +456,6 @@ private fun SpendIncomeToggle(
             ),
             label = "pillOffset"
         )
-        // Pill nền màu đen trung tính (giữ tone đen/trắng), chỉ trượt vị trí, không đổi màu theo Income/Spend
         Box(
             modifier = Modifier
                 .offset(x = pillOffset)
@@ -305,11 +529,9 @@ private fun AmountEntry(
     val formatted = formatAmount(amount)
     val digitCount = amount.count { it.isDigit() }
 
-    // ✅ CỠ CHỮ ĐỘNG: giảm theo số chữ số, thay vì dùng graphicsLayer scale
-    val baseFontSize = 56f // sp as float để animate mượt
+    val baseFontSize = 56f
     val minFontSize = 26f
 
-    // Từ chữ số thứ 6 trở đi, giảm 4sp mỗi chữ số
     val overflowDigits = (digitCount - 5).coerceAtLeast(0)
     val targetFontSize = (baseFontSize - overflowDigits * 4f).coerceAtLeast(minFontSize)
 
@@ -321,7 +543,6 @@ private fun AmountEntry(
     val fontSize = animatedFontSize.sp
     val vndFontSize = (animatedFontSize * 0.55f).sp
 
-    // Pop scale vẫn dùng graphicsLayer (vì spam bấm, không remeasure)
     val popScale = remember { Animatable(1f) }
     LaunchedEffect(formatted) {
         popScale.snapTo(0.95f)
@@ -334,7 +555,7 @@ private fun AmountEntry(
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 8.dp), // ✅ Chừa space 2 bên
+            .padding(horizontal = 8.dp),
         contentAlignment = Alignment.Center
     ) {
         Row(
@@ -411,7 +632,6 @@ private fun NoteField(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Text gõ trực tiếp, không icon, không khung — chỉ căn giữa phía trên đường kẻ đứt
         BasicTextField(
             value = note,
             onValueChange = { if (it.length <= maxLength) onNoteChange(it) },
@@ -434,7 +654,6 @@ private fun NoteField(
 
         Spacer(modifier = Modifier.height(6.dp))
 
-        // Đường kẻ đứt mỏng — bấm vào đây cũng mở bàn phím để gõ note, giống tap vào divider trong ảnh mẫu
         DashedDivider(
             modifier = Modifier
                 .width(220.dp)
@@ -444,7 +663,6 @@ private fun NoteField(
                 ) { focusRequester.requestFocus() }
         )
 
-        // Gợi ý hiện ngay khi note đang focus, ẩn mượt khi rời focus — wrap nhiều dòng giống ảnh mẫu
         AnimatedVisibility(
             visible = isFocused,
             enter = fadeIn(tween(150)) + expandVertically(tween(150)),
@@ -471,9 +689,6 @@ private fun NoteField(
     }
 }
 
-/**
- * Đường kẻ đứt mỏng vẽ bằng Canvas — đúng kiểu "- - - - -" trong ảnh mẫu, tone xám trung tính.
- */
 @Composable
 private fun DashedDivider(modifier: Modifier = Modifier) {
     Canvas(modifier = modifier.height(1.dp)) {
@@ -505,7 +720,6 @@ private fun NoteSuggestionChip(text: String, onClick: () -> Unit) {
     }
 }
 
-// Format giữ nguyên decimal part (không bỏ như SharedComponents.formatAmountWithCommas)
 private fun formatAmount(rawAmount: String): String {
     if (rawAmount.isEmpty() || rawAmount == "0") return "0"
     val normalized = rawAmount.trimStart('0').ifEmpty { "0" }

@@ -3,6 +3,9 @@ package com.example.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.example.data.MoneySource
+import com.example.data.MoneySourceDao
+import com.example.data.MoneySourceType
 import com.example.data.Transaction
 import com.example.data.TransactionDao
 import kotlinx.coroutines.flow.SharingStarted
@@ -14,7 +17,28 @@ import java.util.Calendar
 
 enum class ChartPeriod { DAY, WEEK, MONTH, YEAR }
 
-class FinanceViewModel(private val transactionDao: TransactionDao) : ViewModel() {
+class FinanceViewModel(private val transactionDao: TransactionDao,
+                       private val moneySourceDao: MoneySourceDao
+    ) : ViewModel() {
+
+    // Seed default money sources on first launch
+    init {
+        viewModelScope.launch {
+            val existing = moneySourceDao.getAllMoneySourcesOnce()
+            if (existing.isEmpty()) {
+                val defaults = listOf(
+                    MoneySource(type = MoneySourceType.CASH, name = "Cash", balance = 0.0),
+                    MoneySource(type = MoneySourceType.CHECKING, name = "Checking Account", balance = 0.0),
+                    MoneySource(type = MoneySourceType.SAVINGS, name = "Savings Account", balance = 0.0),
+                    MoneySource(type = MoneySourceType.E_WALLET, name = "E-Wallet", balance = 0.0),
+                    MoneySource(type = MoneySourceType.CREDIT_CARD, name = "Credit Card", balance = 0.0),
+                    MoneySource(type = MoneySourceType.INVESTMENT, name = "Stock Portfolio", balance = 0.0),
+                    MoneySource(type = MoneySourceType.OTHER, name = "Other", balance = 0.0)
+                )
+                defaults.forEach { moneySourceDao.insertMoneySource(it) }
+            }
+        }
+    }
 
     val transactions: StateFlow<List<Transaction>> = transactionDao.getAllTransactions()
         .stateIn(
@@ -23,9 +47,22 @@ class FinanceViewModel(private val transactionDao: TransactionDao) : ViewModel()
             initialValue = emptyList()
         )
 
-    val totalBalance: StateFlow<Double> = transactions.map { list ->
-        list.sumOf { if (it.isIncome) it.amount else -it.amount }
+    // ── Money Sources ────────────────────────────────────────────────────────
+    val moneySources: StateFlow<List<MoneySource>> = moneySourceDao.getAllMoneySources()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+    val totalBalance: StateFlow<Double> = moneySources.map { list ->
+        list.sumOf { it.balance }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0.0)
+
+    /** Money sources with balance > 0 (for OverviewScreen) */
+    val activeMoneySources: StateFlow<List<MoneySource>> = moneySources.map { list ->
+        list.filter { it.balance > 0 }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val monthlyIncome: StateFlow<Double> = transactions.map { list ->
         val cal = Calendar.getInstance()
@@ -116,16 +153,49 @@ class FinanceViewModel(private val transactionDao: TransactionDao) : ViewModel()
         }
     }
 
-    fun addTransaction(amount: Double, note: String, isIncome: Boolean) {
+    fun addMoneySource(type: MoneySourceType, name: String, balance: Double) {
+        viewModelScope.launch {
+            moneySourceDao.insertMoneySource(
+                MoneySource(
+                    type = type,
+                    name = name,
+                    balance = balance
+                )
+            )
+        }
+    }
+
+    fun removeMoneySource(id: Long) {
+        viewModelScope.launch {
+            moneySourceDao.deleteMoneySource(id)
+        }
+    }
+
+    fun updateMoneySourceBalance(id: Long, newBalance: Double) {
+        viewModelScope.launch {
+            moneySourceDao.updateMoneySourceBalance(id, newBalance)
+        }
+    }
+
+    fun addTransaction(amount: Double, note: String, isIncome: Boolean, moneySourceId: Long? = null) {
         viewModelScope.launch {
             transactionDao.insertTransaction(
                 Transaction(
                     amount = amount,
                     note = note,
                     isIncome = isIncome,
-                    timestamp = System.currentTimeMillis()
+                    timestamp = System.currentTimeMillis(),
+                    moneySourceId = moneySourceId
                 )
             )
+            // Update source balance
+            if (moneySourceId != null) {
+                val source = moneySourceDao.getAllMoneySourcesOnce().find { it.id == moneySourceId }
+                if (source != null) {
+                    val delta = if (isIncome) amount else -amount
+                    moneySourceDao.updateMoneySourceBalance(moneySourceId, source.balance + delta)
+                }
+            }
         }
     }
 }
@@ -134,11 +204,14 @@ data class ChartBar(val label: String, val income: Double, val spend: Double) {
     val total get() = income + spend
 }
 
-class FinanceViewModelFactory(private val transactionDao: TransactionDao) : ViewModelProvider.Factory {
+class FinanceViewModelFactory(
+    private val transactionDao: TransactionDao,
+    private val moneySourceDao: MoneySourceDao
+) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(FinanceViewModel::class.java)) {
             @Suppress("UNCHECKED_CAST")
-            return FinanceViewModel(transactionDao) as T
+            return FinanceViewModel(transactionDao, moneySourceDao) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")
     }

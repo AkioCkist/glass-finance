@@ -57,7 +57,9 @@ fun FinanceTrackerApp() {
 
     // Main finance VM
     val financeViewModel: FinanceViewModel = viewModel(
-        factory = FinanceViewModelFactory(database.transactionDao())
+        factory = FinanceViewModelFactory(database.transactionDao(),
+         moneySourceDao = database.moneySourceDao()
+        )
     )
 
     // Debt repositories

@@ -3,32 +3,37 @@ package com.example.ui.screens
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
-import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.*
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowDownward
-import androidx.compose.material.icons.filled.ArrowUpward
-import androidx.compose.material.icons.filled.PieChart
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.AddCard
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import com.example.data.MoneySource
+import com.example.data.MoneySourceType
 import com.example.ui.components.*
 import com.example.ui.theme.*
 import com.example.viewmodel.ChartBar
@@ -41,16 +46,18 @@ import java.util.Locale
 
 @Composable
 fun SummaryScreen(viewModel: FinanceViewModel) {
+    val totalBalance by viewModel.totalBalance.collectAsState()
     val monthlyIncome by viewModel.monthlyIncome.collectAsState()
     val monthlySpend by viewModel.monthlySpend.collectAsState()
     val transactions by viewModel.transactions.collectAsState()
+    val moneySources by viewModel.moneySources.collectAsState()
     var selectedPeriod by remember { mutableStateOf(ChartPeriod.MONTH) }
 
     val chartData = remember(selectedPeriod, transactions) {
         viewModel.getChartData(selectedPeriod, transactions)
     }
 
-    val fmt = NumberFormat.getNumberInstance(Locale("vi", "VN"))
+    val fmt = NumberFormat.getNumberInstance(Locale.US)
 
     Column(
         modifier = Modifier
@@ -63,13 +70,33 @@ fun SummaryScreen(viewModel: FinanceViewModel) {
 
         LazyColumn(
             modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(24.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp),
             contentPadding = PaddingValues(bottom = 80.dp)
         ) {
 
-            // ── SECTION: INCOME / SPEND STATS ──
+            // ── TOTAL BALANCE ──
             item {
-                Spacer(modifier = Modifier.height(16.dp))
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        "Total Balance",
+                        style = Typography.labelMedium,
+                        color = TextSecondary
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "VND ${fmt.format(totalBalance)}",
+                        style = Typography.displayLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = TextPrimary
+                    )
+                }
+            }
+
+            // ── INCOME / SPEND STATS ──
+            item {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -89,12 +116,10 @@ fun SummaryScreen(viewModel: FinanceViewModel) {
                 }
             }
 
-            // ── SECTION: LIVE CHART ──
+            // ── CHART ──
             item {
                 GlassCard(modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.padding(20.dp)) {
-
-                        // Header + period toggle
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -106,7 +131,6 @@ fun SummaryScreen(viewModel: FinanceViewModel) {
                                 fontWeight = FontWeight.SemiBold,
                                 color = TextPrimary
                             )
-                            // Period toggle buttons
                             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                 listOf(
                                     ChartPeriod.DAY to "Day",
@@ -122,66 +146,62 @@ fun SummaryScreen(viewModel: FinanceViewModel) {
                                 }
                             }
                         }
-
                         Spacer(modifier = Modifier.height(20.dp))
-
-                        // Legend
                         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                             ChartLegendDot("Income", GainGreen)
                             ChartLegendDot("Spend", ExpenseRed)
                         }
-
                         Spacer(modifier = Modifier.height(16.dp))
-
-                        // Real chart
                         LiveBarChart(bars = chartData)
                     }
                 }
             }
 
-            // ── SECTION: INCOME SOURCES ──
+            // ── MONEY SOURCES ──
             item {
-                GlassCard(modifier = Modifier.fillMaxWidth()) {
-                    Column(modifier = Modifier.padding(24.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.Bottom
-                        ) {
-                            Text(
-                                "Income Sources",
-                                style = Typography.bodyLarge,
-                                fontWeight = FontWeight.Medium,
-                                color = TextPrimary
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "Money Sources",
+                        style = Typography.bodyLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        color = TextPrimary
+                    )
+                    Text(
+                        "VND ${fmt.format(moneySources.sumOf { it.balance })}",
+                        style = Typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                        color = TextSecondary
+                    )
+                }
+            }
+
+            // source cards — 2 per row
+            val chunked = moneySources.chunked(2)
+            chunked.forEach { rowSources ->
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        rowSources.forEach { source ->
+                            SourceCard(
+                                modifier = Modifier.weight(1f),
+                                source = source,
+                                fmt = fmt
                             )
-                            Icon(Icons.Default.PieChart, contentDescription = null, tint = TextSecondary)
                         }
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(8.dp)
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(GlassBorder)
-                        ) {
-                            Box(modifier = Modifier.weight(0.6f).fillMaxHeight().background(PrimaryVibrant))
-                            Box(modifier = Modifier.weight(0.25f).fillMaxHeight().background(TextSecondary))
-                            Box(modifier = Modifier.weight(0.15f).fillMaxHeight().background(GlassBorder))
-                        }
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            SummaryLegendItem("Salary", PrimaryVibrant)
-                            SummaryLegendItem("Freelance", TextSecondary)
-                            SummaryLegendItem("Other", GlassBorder)
+                        if (rowSources.size < 2) {
+                            Spacer(modifier = Modifier.weight(1f))
                         }
                     }
                 }
             }
 
-            // ── SECTION: RECENT TRANSACTIONS ──
+            // ── RECENT TRANSACTIONS ──
             item {
                 Text(
                     "Recent Transactions",
@@ -202,20 +222,109 @@ fun SummaryScreen(viewModel: FinanceViewModel) {
             }
             if (transactions.isEmpty()) {
                 item {
-                    Text("No transactions yet.", style = Typography.bodyMedium, color = TextSecondary)
+                    Text(
+                        "No transactions yet.",
+                        style = Typography.bodyMedium,
+                        color = TextSecondary
+                    )
                 }
             }
         }
     }
 }
 
-// ── COMPONENTS ──
+// ══════════════════════════════════════════════════════════════════════════════
+//  COMPONENTS
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── Source Card ──────────────────────────────────────────────────────────────
+
+private fun iconForType(type: MoneySourceType): ImageVector = when (type) {
+    MoneySourceType.CASH       -> Icons.Default.AccountBalanceWallet
+    MoneySourceType.CHECKING   -> Icons.Default.AccountBalance
+    MoneySourceType.SAVINGS    -> Icons.Default.Savings
+    MoneySourceType.INVESTMENT -> Icons.Default.TrendingUp
+    MoneySourceType.CREDIT_CARD -> Icons.Default.CreditCard
+    MoneySourceType.E_WALLET   -> Icons.Default.Phone
+    MoneySourceType.OTHER      -> Icons.Default.MoreHoriz
+}
+
+private fun colorForType(type: MoneySourceType): Color = when (type) {
+    MoneySourceType.CASH       -> Color(0xFF34C759) // green
+    MoneySourceType.CHECKING   -> Color(0xFF007AFF) // blue
+    MoneySourceType.SAVINGS    -> Color(0xFFAF52DE) // purple
+    MoneySourceType.INVESTMENT -> Color(0xFFFF9500) // orange
+    MoneySourceType.CREDIT_CARD -> Color(0xFFFF3B30) // red
+    MoneySourceType.E_WALLET   -> Color(0xFF5AC8FA) // cyan
+    MoneySourceType.OTHER      -> TextSecondary
+}
+
+@Composable
+private fun SourceCard(
+    modifier: Modifier = Modifier,
+    source: MoneySource,
+    fmt: NumberFormat
+) {
+    val accent = colorForType(source.type)
+    GlassCard(modifier = modifier) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(accent.copy(alpha = 0.12f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        iconForType(source.type),
+                        contentDescription = null,
+                        tint = accent,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = source.name,
+                style = Typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                color = TextPrimary,
+                maxLines = 1
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "VND ${fmt.format(source.balance)}",
+                style = Typography.bodyLarge,
+                fontWeight = FontWeight.Bold,
+                color = TextPrimary,
+                maxLines = 1
+            )
+        }
+    }
+}
+
+// ── StatCard ─────────────────────────────────────────────────────────────────
 
 @Composable
 private fun StatCard(modifier: Modifier = Modifier, label: String, value: String, isIncome: Boolean) {
     GlassCard(modifier = modifier) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
                 Box(
                     modifier = Modifier
                         .size(28.dp)
@@ -242,6 +351,8 @@ private fun StatCard(modifier: Modifier = Modifier, label: String, value: String
         }
     }
 }
+
+// ── PeriodChip ───────────────────────────────────────────────────────────────
 
 @Composable
 private fun PeriodChip(label: String, isSelected: Boolean, onClick: () -> Unit) {
@@ -271,13 +382,20 @@ private fun PeriodChip(label: String, isSelected: Boolean, onClick: () -> Unit) 
     }
 }
 
+// ── ChartLegendDot ───────────────────────────────────────────────────────────
+
 @Composable
 private fun ChartLegendDot(label: String, color: Color) {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
         Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(color))
         Text(label, style = Typography.labelSmall, color = TextSecondary)
     }
 }
+
+// ── LiveBarChart ─────────────────────────────────────────────────────────────
 
 @Composable
 private fun LiveBarChart(bars: List<ChartBar>) {
@@ -294,7 +412,6 @@ private fun LiveBarChart(bars: List<ChartBar>) {
     val maxValue = bars.maxOf { maxOf(it.income, it.spend) }.coerceAtLeast(1.0)
     val chartHeight = 120.dp
 
-    // Bars
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -305,12 +422,18 @@ private fun LiveBarChart(bars: List<ChartBar>) {
         bars.forEach { bar ->
             val incomeH by animateFloatAsState(
                 targetValue = (bar.income / maxValue).toFloat(),
-                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow),
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                    stiffness = Spring.StiffnessMediumLow
+                ),
                 label = "incomeH"
             )
             val spendH by animateFloatAsState(
                 targetValue = (bar.spend / maxValue).toFloat(),
-                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow),
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                    stiffness = Spring.StiffnessMediumLow
+                ),
                 label = "spendH"
             )
 
@@ -319,7 +442,6 @@ private fun LiveBarChart(bars: List<ChartBar>) {
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Bottom
             ) {
-                // Income bar
                 Box(
                     modifier = Modifier
                         .fillMaxWidth(0.45f)
@@ -334,7 +456,6 @@ private fun LiveBarChart(bars: List<ChartBar>) {
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Bottom
             ) {
-                // Spend bar
                 Box(
                     modifier = Modifier
                         .fillMaxWidth(0.45f)
@@ -348,7 +469,6 @@ private fun LiveBarChart(bars: List<ChartBar>) {
 
     Spacer(modifier = Modifier.height(6.dp))
 
-    // X-axis labels (show only every Nth label so they don't overlap)
     val step = when {
         bars.size > 18 -> 4
         bars.size > 12 -> 3
@@ -365,21 +485,14 @@ private fun LiveBarChart(bars: List<ChartBar>) {
                 style = Typography.labelSmall,
                 color = TextSecondary,
                 fontSize = 8.sp,
-                modifier = Modifier.weight(2f),  // weight=2 because income+spend share same pair
+                modifier = Modifier.weight(2f),
                 maxLines = 1
             )
         }
     }
 }
 
-@Composable
-private fun SummaryLegendItem(label: String, color: Color) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(color))
-        Spacer(modifier = Modifier.width(6.dp))
-        Text(label, style = Typography.labelMedium, color = TextSecondary)
-    }
-}
+// ── Transaction Row ──────────────────────────────────────────────────────────
 
 @Composable
 private fun SummaryTransactionRow(isIncome: Boolean, amount: String, title: String, dateStr: String) {
@@ -391,8 +504,13 @@ private fun SummaryTransactionRow(isIncome: Boolean, amount: String, title: Stri
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
-                    modifier = Modifier.size(40.dp).clip(CircleShape)
-                        .background(if (isIncome) GainGreen.copy(alpha = 0.1f) else ExpenseRed.copy(alpha = 0.1f)),
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(
+                            if (isIncome) GainGreen.copy(alpha = 0.1f)
+                            else ExpenseRed.copy(alpha = 0.1f)
+                        ),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
@@ -403,7 +521,12 @@ private fun SummaryTransactionRow(isIncome: Boolean, amount: String, title: Stri
                 }
                 Spacer(modifier = Modifier.width(16.dp))
                 Column {
-                    Text(title, style = Typography.bodyLarge, fontWeight = FontWeight.Medium, color = TextPrimary)
+                    Text(
+                        title.ifEmpty { if (isIncome) "Income" else "Expense" },
+                        style = Typography.bodyLarge,
+                        fontWeight = FontWeight.Medium,
+                        color = TextPrimary
+                    )
                     Text(dateStr, style = Typography.labelMedium, color = TextSecondary)
                 }
             }

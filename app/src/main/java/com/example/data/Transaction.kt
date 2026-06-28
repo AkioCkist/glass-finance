@@ -9,5 +9,6 @@ data class Transaction(
     val amount: Double,
     val note: String,
     val isIncome: Boolean,
-    val timestamp: Long
+    val timestamp: Long,
+    val moneySourceId: Long? = null
 )

@@ -10,9 +10,10 @@ import androidx.room.RoomDatabase
         Transaction::class,
         DebtPerson::class,
         Debt::class,
-        DebtTransaction::class
+        DebtTransaction::class,
+        MoneySource::class
     ],
-    version = 3,
+    version = 5,
     exportSchema = false
 )
 abstract class FinanceDatabase : RoomDatabase() {
@@ -20,6 +21,7 @@ abstract class FinanceDatabase : RoomDatabase() {
     abstract fun debtPersonDao(): DebtPersonDao
     abstract fun debtDao(): DebtDao
     abstract fun debtTransactionDao(): DebtTransactionDao
+    abstract fun moneySourceDao(): MoneySourceDao // Thêm dòng này
 
     companion object {
         @Volatile
