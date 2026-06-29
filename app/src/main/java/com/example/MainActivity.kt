@@ -20,6 +20,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -35,23 +36,33 @@ import com.example.ui.components.FloatingBottomNav
 import com.example.ui.screens.*
 import com.example.ui.theme.*
 import com.example.viewmodel.*
-import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.firstOrNull
 
 class MainActivity : ComponentActivity() {
+    @Volatile
+    private var contentReady = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
+        val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
+
+        // Hold splash until all screens pre-warmed + first frame settled
+        splashScreen.setKeepOnScreenCondition { !contentReady }
+
         enableEdgeToEdge()
         setContent {
             MyApplicationTheme {
-                FinanceTrackerApp()
+                FinanceTrackerApp(onContentReady = { contentReady = true })
             }
         }
     }
 }
 
 @Composable
-fun FinanceTrackerApp() {
+fun FinanceTrackerApp(onContentReady: () -> Unit = {}) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route ?: "overview"
@@ -96,6 +107,38 @@ fun FinanceTrackerApp() {
             route == "debt/list" -> 3
             else -> 0
         }
+    }
+
+    // ── Start-up pre-warming: run behind splash screen ──────────────────────
+    // Navigate each tab screen so Compose pre-loads all classes, compiles
+    // animation shaders, blurs, icons, and layout code *before* user sees it.
+    // Splash holds until this completes.
+    LaunchedEffect(Unit) {
+        // Ensure Room DB fully initialized (bg pre-warm started in Application.onCreate)
+        withContext(Dispatchers.IO) {
+            application.database.openHelper.writableDatabase
+        }
+
+        // Pre-warm: visit every tab to force first-time composition + shader compilation
+        val tabs = listOf("spend", "summary", "debt/list")
+        for (route in tabs) {
+            navController.navigate(route) {
+                popUpTo("overview") { saveState = false }
+                launchSingleTop = true
+                restoreState = false
+            }
+            // Let one full frame pass — composition, layout, draw all happen
+            withFrameNanos { }
+        }
+
+        // Return to start destination (overview) with fresh state
+        navController.navigate("overview") {
+            popUpTo(navController.graph.startDestinationId) { inclusive = true }
+            launchSingleTop = true
+        }
+        withFrameNanos { } // let overview recompose + settle
+
+        onContentReady()
     }
 
     Box(modifier = Modifier.fillMaxSize().background(AppBackground)) {
