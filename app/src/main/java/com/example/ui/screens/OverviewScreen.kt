@@ -10,6 +10,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -18,6 +20,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -28,7 +31,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
@@ -46,139 +48,333 @@ import java.util.Locale
 import kotlin.math.atan2
 import kotlin.math.sqrt
 
+enum class SortOrder {
+    NAME_ASC,
+    NAME_DESC,
+    BALANCE_ASC,
+    BALANCE_DESC
+}
+
 @Composable
 fun OverviewScreen(viewModel: FinanceViewModel) {
     val totalBalance by viewModel.totalBalance.collectAsState()
-    val activeSources by viewModel.activeMoneySources.collectAsState()
+    val allSources by viewModel.moneySources.collectAsState()
     val debtSummary by viewModel.debtSummary.collectAsState()
+
+    // State cho menu và filter
+    var showMenu by remember { mutableStateOf(false) }
+    var hideZeroBalance by remember { mutableStateOf(false) }
+    var sortOrder by remember { mutableStateOf(SortOrder.NAME_ASC) }
+
+    // Filter và sort sources
+    val filteredSources = remember(allSources, hideZeroBalance) {
+        if (hideZeroBalance) {
+            allSources.filter { it.balance > 0 }
+        } else {
+            allSources
+        }
+    }
+
+    val sortedSources = remember(filteredSources, sortOrder) {
+        when (sortOrder) {
+            SortOrder.NAME_ASC -> filteredSources.sortedBy { it.name.lowercase() }
+            SortOrder.NAME_DESC -> filteredSources.sortedByDescending { it.name.lowercase() }
+            SortOrder.BALANCE_ASC -> filteredSources.sortedBy { it.balance }
+            SortOrder.BALANCE_DESC -> filteredSources.sortedByDescending { it.balance }
+        }
+    }
 
     val fmt = NumberFormat.getNumberInstance(Locale.US)
     val formattedBalance = fmt.format(totalBalance)
 
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = 16.dp)
-            .statusBarsPadding(),
-        horizontalAlignment = Alignment.CenterHorizontally
+            .statusBarsPadding()
     ) {
-        // Header custom
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(50.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(
-                "Overview",
-                style = Typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                color = TextPrimary
-            )
-
-            IconButton(onClick = { /* Menu */ }) {
-                Icon(
-                    Icons.Default.MoreVert,
-                    contentDescription = "More options",
-                    tint = TextPrimary
+            // Header với menu
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "Overview",
+                    style = Typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = TextPrimary
                 )
-            }
-        }
 
-        Spacer(modifier = Modifier.height(12.dp))
-        BalanceSection(title = "Total Balance", value = formattedBalance)
-        Spacer(modifier = Modifier.height(20.dp))
+                // Sử dụng Box để menu xuất hiện đúng vị trí
+                Box {
+                    IconButton(onClick = { showMenu = !showMenu }) {
+                        Icon(
+                            Icons.Default.MoreVert,
+                            contentDescription = "More options",
+                            tint = TextPrimary
+                        )
+                    }
 
-        LazyColumn(
-            modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-            contentPadding = PaddingValues(bottom = 80.dp)
-        ) {
-            // ── DISTRIBUTION BLEND CHART ──
-            if (totalBalance > 0 && activeSources.isNotEmpty()) {
-                item {
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalAlignment = Alignment.CenterHorizontally
+                    DropdownMenu(
+                        expanded = showMenu,
+                        onDismissRequest = { showMenu = false },
+                        modifier = Modifier
+                            .background(GlassBackground)
+                            .clip(RoundedCornerShape(12.dp))
+                            .width(260.dp)
                     ) {
-                        CircularBlendChart(
-                            sources = activeSources,
+                        // Sort options
+                        DropdownMenuItem(
+                            text = {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(Icons.Default.Sort, contentDescription = null, modifier = Modifier.size(20.dp))
+                                        Spacer(modifier = Modifier.width(12.dp))
+                                        Text("Name A-Z")
+                                    }
+                                    if (sortOrder == SortOrder.NAME_ASC) {
+                                        Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    }
+                                }
+                            },
+                            onClick = {
+                                sortOrder = SortOrder.NAME_ASC
+                                showMenu = false
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(Icons.Default.Sort, contentDescription = null, modifier = Modifier.size(20.dp))
+                                        Spacer(modifier = Modifier.width(12.dp))
+                                        Text("Name Z-A")
+                                    }
+                                    if (sortOrder == SortOrder.NAME_DESC) {
+                                        Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    }
+                                }
+                            },
+                            onClick = {
+                                sortOrder = SortOrder.NAME_DESC
+                                showMenu = false
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(Icons.Default.TrendingUp, contentDescription = null, modifier = Modifier.size(20.dp))
+                                        Spacer(modifier = Modifier.width(12.dp))
+                                        Text("Balance ↑")
+                                    }
+                                    if (sortOrder == SortOrder.BALANCE_ASC) {
+                                        Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    }
+                                }
+                            },
+                            onClick = {
+                                sortOrder = SortOrder.BALANCE_ASC
+                                showMenu = false
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(Icons.Default.TrendingDown, contentDescription = null, modifier = Modifier.size(20.dp))
+                                        Spacer(modifier = Modifier.width(12.dp))
+                                        Text("Balance ↓")
+                                    }
+                                    if (sortOrder == SortOrder.BALANCE_DESC) {
+                                        Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    }
+                                }
+                            },
+                            onClick = {
+                                sortOrder = SortOrder.BALANCE_DESC
+                                showMenu = false
+                            }
+                        )
+
+                        HorizontalDivider(color = GlassBorder, thickness = 1.dp)
+
+                        // Show/Hide zero balance
+                        DropdownMenuItem(
+                            text = {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            if (hideZeroBalance) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(12.dp))
+                                        Text(if (hideZeroBalance) "Show empty" else "Hide empty")
+                                    }
+                                    if (hideZeroBalance) {
+                                        Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    }
+                                }
+                            },
+                            onClick = {
+                                hideZeroBalance = !hideZeroBalance
+                                showMenu = false
+                            }
+                        )
+
+                        HorizontalDivider(color = GlassBorder, thickness = 1.dp)
+
+                        // Export CSV
+                        DropdownMenuItem(
+                            text = {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(20.dp))
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Text("Export CSV")
+                                }
+                            },
+                            onClick = {
+                                viewModel.exportCSV(sortedSources, totalBalance)
+                                showMenu = false
+                            }
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+            BalanceSection(title = "Total Balance", value = formattedBalance)
+            Spacer(modifier = Modifier.height(20.dp))
+
+            LazyColumn(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                contentPadding = PaddingValues(bottom = 80.dp)
+            ) {
+                // ── DISTRIBUTION BLEND CHART ──
+                if (totalBalance > 0 && sortedSources.isNotEmpty()) {
+                    item {
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            CircularBlendChart(
+                                sources = sortedSources,
+                                total = totalBalance,
+                                fmt = fmt
+                            )
+                        }
+                    }
+                    item {
+                        BlendChartBreakdown(
+                            sources = sortedSources,
                             total = totalBalance,
                             fmt = fmt
                         )
                     }
                 }
-                item {
-                    BlendChartBreakdown(
-                        sources = activeSources,
-                        total = totalBalance,
-                        fmt = fmt
-                    )
-                }
-            }
 
-            // ── SECTION HEADER ──
-            item {
-                Text(
-                    "My Money Sources",
-                    style = Typography.bodyLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    color = TextPrimary
-                )
-            }
-
-            // Source cards — 2 per row
-            val chunked = activeSources.chunked(2)
-            chunked.forEach { rowSources ->
+                // ── SECTION HEADER ──
                 item {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        rowSources.forEach { source ->
-                            OverviewSourceCard(
-                                modifier = Modifier.weight(1f),
-                                source = source,
-                                fmt = fmt
-                            )
-                        }
-                        if (rowSources.size < 2) {
-                            Spacer(modifier = Modifier.weight(1f))
-                        }
-                    }
-                }
-            }
-
-            if (activeSources.isEmpty()) {
-                item {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 32.dp),
-                        contentAlignment = Alignment.Center
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            "No money sources yet",
-                            style = Typography.bodyMedium,
+                            "My Money Sources",
+                            style = Typography.bodyLarge,
+                            fontWeight = FontWeight.SemiBold,
+                            color = TextPrimary
+                        )
+                        Text(
+                            "${sortedSources.size} sources",
+                            style = Typography.labelSmall,
                             color = TextSecondary
                         )
                     }
                 }
-            }
 
-            // ── DEBT SUMMARY ──
-            if (debtSummary.owedToMe > 0 || debtSummary.iOwe > 0) {
-                item {
-                    Text(
-                        "Debt Summary",
-                        style = Typography.bodyLarge,
-                        fontWeight = FontWeight.SemiBold,
-                        color = TextPrimary
-                    )
+                // Source cards — 2 per row
+                val chunked = sortedSources.chunked(2)
+                chunked.forEach { rowSources ->
+                    item {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            rowSources.forEach { source ->
+                                OverviewSourceCard(
+                                    modifier = Modifier.weight(1f),
+                                    source = source,
+                                    fmt = fmt
+                                )
+                            }
+                            if (rowSources.size < 2) {
+                                Spacer(modifier = Modifier.weight(1f))
+                            }
+                        }
+                    }
                 }
-                item {
-                    DebtSummaryCard(summary = debtSummary, fmt = fmt)
+
+                if (sortedSources.isEmpty()) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 32.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                if (hideZeroBalance) "No money sources with balance" else "No money sources yet",
+                                style = Typography.bodyMedium,
+                                color = TextSecondary
+                            )
+                        }
+                    }
+                }
+
+                // ── DEBT SUMMARY ──
+                if (debtSummary.owedToMe > 0 || debtSummary.iOwe > 0) {
+                    item {
+                        Text(
+                            "Debt Summary",
+                            style = Typography.bodyLarge,
+                            fontWeight = FontWeight.SemiBold,
+                            color = TextPrimary
+                        )
+                    }
+                    item {
+                        DebtSummaryCard(summary = debtSummary, fmt = fmt)
+                    }
                 }
             }
         }
@@ -531,7 +727,7 @@ private fun CircularBlendChart(
 // chart's center a soft glassy falloff without introducing a new surface
 // color into the design system.
 private val BackgroundColorForBlendCore: Color
-    get() = com.example.ui.theme.AppBackground
+    get() = AppBackground
 
 @Composable
 private fun BlendChartBreakdown(

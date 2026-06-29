@@ -4,6 +4,7 @@ import androidx.compose.ui.graphics.Color
 
 val AppBackground = Color(0xFFFDFCF9)
 val GlassWhite = Color(0xFFF2F4F6)
+val GlassBackground = Color(0xD9FFFFFF)
 val GlassBorder = Color(0xFFE7E8EA)
 
 val PrimaryVibrant = Color(0xFF000000)

@@ -167,31 +167,11 @@ fun BalanceSection(
             color = TextSecondary
         )
         Spacer(modifier = Modifier.height(4.dp))
-
-        // Hiển thị số tiền với VND superscript
         Text(
-            text = buildAnnotatedString {
-                withStyle(
-                    style = SpanStyle(
-                        fontSize = 48.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = TextPrimary
-                    )
-                ) {
-                    append(value)
-                }
-                withStyle(
-                    style = SpanStyle(
-                        fontSize = 24.sp, // Nhỏ hơn
-                        fontWeight = FontWeight.Medium,
-                        color = TextPrimary,
-                        baselineShift = BaselineShift.Superscript // 👈 Đẩy lên trên
-                    )
-                ) {
-                    append(" VND")
-                }
-            },
-            style = Typography.headlineLarge // Style nền để giữ baseline
+            text = "$value VND",
+            style = Typography.headlineLarge,
+            fontWeight = FontWeight.Bold,
+            color = TextPrimary
         )
     }
 }
