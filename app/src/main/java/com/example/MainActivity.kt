@@ -4,8 +4,11 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -117,65 +120,31 @@ fun FinanceTrackerApp() {
                     modifier = Modifier
                         .fillMaxSize() // Bỏ padding bottom ở đây để nội dung tràn xuống dưới nav bar
                     ,
+                    // Dùng fade + scale nhẹ thay cho slide ngang.
+                    // Lý do: slide container phải tính toán full-width offset và composite
+                    // 2 layer cạnh nhau trong lúc NavController còn đang restore lại state
+                    // (do saveState/restoreState ở bottom nav) -> dễ rớt frame ở lần bấm đầu.
+                    // Fade+scale rẻ hơn nhiều về compositing và không phụ thuộc hướng index,
+                    // nên animation luôn ăn ngay từ lần bấm đầu tiên.
                     enterTransition = {
-                        val initialIndex = getRouteIndex(initialState.destination.route)
-                        val targetIndex = getRouteIndex(targetState.destination.route)
-                        if (targetIndex > initialIndex) {
-                            slideIntoContainer(
-                                AnimatedContentTransitionScope.SlideDirection.Left,
-                                animationSpec = tween(300)
-                            )
-                        } else {
-                            slideIntoContainer(
-                                AnimatedContentTransitionScope.SlideDirection.Right,
-                                animationSpec = tween(300)
-                            )
-                        }
+                        fadeIn(animationSpec = tween(220, easing = FastOutSlowInEasing)) +
+                                scaleIn(
+                                    initialScale = 0.96f,
+                                    animationSpec = tween(220, easing = FastOutSlowInEasing)
+                                )
                     },
                     exitTransition = {
-                        val initialIndex = getRouteIndex(initialState.destination.route)
-                        val targetIndex = getRouteIndex(targetState.destination.route)
-                        if (targetIndex > initialIndex) {
-                            slideOutOfContainer(
-                                AnimatedContentTransitionScope.SlideDirection.Left,
-                                animationSpec = tween(300)
-                            )
-                        } else {
-                            slideOutOfContainer(
-                                AnimatedContentTransitionScope.SlideDirection.Right,
-                                animationSpec = tween(300)
-                            )
-                        }
+                        fadeOut(animationSpec = tween(150, easing = FastOutSlowInEasing))
                     },
                     popEnterTransition = {
-                        val initialIndex = getRouteIndex(initialState.destination.route)
-                        val targetIndex = getRouteIndex(targetState.destination.route)
-                        if (targetIndex > initialIndex) {
-                            slideIntoContainer(
-                                AnimatedContentTransitionScope.SlideDirection.Left,
-                                animationSpec = tween(300)
-                            )
-                        } else {
-                            slideIntoContainer(
-                                AnimatedContentTransitionScope.SlideDirection.Right,
-                                animationSpec = tween(300)
-                            )
-                        }
+                        fadeIn(animationSpec = tween(220, easing = FastOutSlowInEasing)) +
+                                scaleIn(
+                                    initialScale = 0.96f,
+                                    animationSpec = tween(220, easing = FastOutSlowInEasing)
+                                )
                     },
                     popExitTransition = {
-                        val initialIndex = getRouteIndex(initialState.destination.route)
-                        val targetIndex = getRouteIndex(targetState.destination.route)
-                        if (targetIndex > initialIndex) {
-                            slideOutOfContainer(
-                                AnimatedContentTransitionScope.SlideDirection.Left,
-                                animationSpec = tween(300)
-                            )
-                        } else {
-                            slideOutOfContainer(
-                                AnimatedContentTransitionScope.SlideDirection.Right,
-                                animationSpec = tween(300)
-                            )
-                        }
+                        fadeOut(animationSpec = tween(150, easing = FastOutSlowInEasing))
                     }
                 ) {
                     composable("overview") { OverviewScreen(financeViewModel) }
@@ -269,7 +238,14 @@ fun FinanceTrackerApp() {
                             3 -> "debt/list"
                             else -> "overview"
                         }
-                        if (currentRoute != targetRoute) {
+                        // Quan trọng: so sánh với navController.currentDestination?.route
+                        // (giá trị tức thời) thay vì biến `currentRoute` lấy từ
+                        // currentBackStackEntryAsState(), vì biến đó chỉ cập nhật sau khi
+                        // recomposition diễn ra. Nếu user bấm đúng lúc recomposition chưa
+                        // kịp chạy, `currentRoute` cũ vẫn còn -> navigate() bị gọi lại lần 2
+                        // một cách thừa, làm animation bị "nuốt" mất ở lần bấm đầu tiên.
+                        val liveRoute = navController.currentDestination?.route
+                        if (liveRoute != targetRoute) {
                             navController.navigate(targetRoute) {
                                 popUpTo(navController.graph.startDestinationId) { saveState = true }
                                 launchSingleTop = true

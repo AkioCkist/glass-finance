@@ -309,7 +309,7 @@ fun DebtFormScreen(
                             if (isEdit) "Save Changes" else "Add Debt",
                             style = MaterialTheme.typography.bodyLarge,
                             fontWeight = FontWeight.SemiBold,
-                            color = if (formValid) Color.White else TextSecondary
+                            color = if (formValid) Color.Black else TextSecondary
                         )
                     }
                 }

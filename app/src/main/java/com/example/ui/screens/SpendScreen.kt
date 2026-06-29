@@ -289,7 +289,7 @@ fun SpendScreen(viewModel: FinanceViewModel,
                 amount = "0"
             }
         )
-        Spacer(modifier = Modifier.height(64.dp))
+        Spacer(modifier = Modifier.height(100.dp))
     }
 
     // ── Source picker dialog ──

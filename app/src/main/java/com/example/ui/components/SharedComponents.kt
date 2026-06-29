@@ -1,7 +1,10 @@
 package com.example.ui.components
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.Spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -370,18 +373,46 @@ fun DirectionLabel(direction: DebtDirection) {
 
 @Composable
 fun NavIcon(icon: ImageVector, isActive: Boolean, onClick: () -> Unit) {
+    // Animate background color smoothly instead of snapping instantly
+    val backgroundColor by animateColorAsState(
+        targetValue = if (isActive) PrimaryVibrant else Color.Transparent,
+        animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing),
+        label = "navIconBg"
+    )
+    val tintColor by animateColorAsState(
+        targetValue = if (isActive) Color.White else TextSecondary,
+        animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing),
+        label = "navIconTint"
+    )
+    // Small "pop" scale when the tab becomes active, using a snappy spring (cheap, no lag)
+    val scale by animateFloatAsState(
+        targetValue = if (isActive) 1f else 0.9f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium
+        ),
+        label = "navIconScale"
+    )
+
+    val interactionSource = remember { MutableInteractionSource() }
+
     Box(
         modifier = Modifier
             .size(50.dp)
+            .scale(scale)
             .clip(CircleShape)
-            .background(if (isActive) PrimaryVibrant else Color.Transparent)
-            .clickable { onClick() },
+            .background(backgroundColor)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null, // avoid extra ripple layer competing with our own animation
+                onClick = onClick
+            ),
         contentAlignment = Alignment.Center
     ) {
         Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = if (isActive) Color.White else TextSecondary
+            tint = tintColor
         )
     }
 }
