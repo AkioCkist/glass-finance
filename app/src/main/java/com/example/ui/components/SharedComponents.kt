@@ -168,10 +168,28 @@ fun BalanceSection(
         )
         Spacer(modifier = Modifier.height(4.dp))
         Text(
-            text = "$value VND",
-            style = Typography.headlineLarge,
-            fontWeight = FontWeight.Bold,
-            color = TextPrimary
+            text = buildAnnotatedString {
+                withStyle(
+                    style = SpanStyle(
+                        fontSize = 48.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TextPrimary
+                    )
+                ) {
+                    append(value)
+                }
+                withStyle(
+                    style = SpanStyle(
+                        fontSize = 24.sp, // Nhỏ hơn
+                        fontWeight = FontWeight.Medium,
+                        color = TextPrimary,
+                        baselineShift = BaselineShift.Superscript // 👈 Đẩy lên trên
+                    )
+                ) {
+                    append(" VND")
+                }
+            },
+            style = Typography.headlineLarge
         )
     }
 }
