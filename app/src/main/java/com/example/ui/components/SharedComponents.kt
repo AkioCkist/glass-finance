@@ -278,8 +278,8 @@ fun FloatingBottomNav(
 ) {
     Box(
         modifier = Modifier
-            .width(220.dp)
-            .height(55.dp)
+            .width(239.dp)
+            .height(64.dp)
     ) {
         LiquidBottomTabs(
             selectedTabIndex = { currentRouteIndex },
@@ -372,7 +372,7 @@ fun DirectionLabel(direction: DebtDirection) {
 fun NavIcon(icon: ImageVector, isActive: Boolean, onClick: () -> Unit) {
     Box(
         modifier = Modifier
-            .size(48.dp)
+            .size(50.dp)
             .clip(CircleShape)
             .background(if (isActive) PrimaryVibrant else Color.Transparent)
             .clickable { onClick() },
@@ -420,7 +420,7 @@ fun NumericKeypad(
                     }
                 }
             }
-            Spacer(modifier = Modifier.height(29.dp))
+            Spacer(modifier = Modifier.height(36.dp))
         }
     }
 }

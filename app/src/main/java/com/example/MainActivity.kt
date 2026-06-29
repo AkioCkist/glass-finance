@@ -254,7 +254,8 @@ fun FinanceTrackerApp() {
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     // Dùng safeContentPadding giống hệt code mẫu của bạn để handle gesture line
-                    .safeContentPadding()
+                    .navigationBarsPadding()
+                    .padding(bottom = 8.dp)
             ) {
                 val routeIndex = getRouteIndex(currentRoute)
                 FloatingBottomNav(
