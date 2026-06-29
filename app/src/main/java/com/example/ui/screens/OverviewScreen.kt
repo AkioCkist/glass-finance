@@ -1,7 +1,9 @@
 package com.example.ui.screens
 
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
@@ -15,7 +17,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -26,6 +30,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -38,6 +43,8 @@ import com.example.viewmodel.DebtSummary
 import com.example.viewmodel.FinanceViewModel
 import java.text.NumberFormat
 import java.util.Locale
+import kotlin.math.atan2
+import kotlin.math.sqrt
 
 @Composable
 fun OverviewScreen(viewModel: FinanceViewModel) {
@@ -357,11 +364,7 @@ private fun DebtAmountItem(
 }
 
 // ── Circular Blend Chart ─────────────────────────────────────────────────────
-// A filled circle split into N proportional segments (one per money source),
-// blended smoothly at each boundary via a multi-stop sweepGradient — no real
-// blur needed, so it renders identically on every Android version.
-
-private const val BLEND_RING_WIDTH = 2.5f // outer ring stroke, in dp
+private const val BLEND_RING_WIDTH = 2.5f
 
 @Composable
 private fun CircularBlendChart(
@@ -369,6 +372,9 @@ private fun CircularBlendChart(
     total: Double,
     fmt: NumberFormat
 ) {
+    // Lưu index phân vùng đang được click chọn (-1 là trạng thái ban đầu)
+    var selectedIndex by remember { mutableIntStateOf(-1) }
+
     GlassCard(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier
@@ -376,30 +382,57 @@ private fun CircularBlendChart(
                 .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(
-                fmt.format(total),
-                style = Typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                color = TextPrimary,
-                textAlign = TextAlign.Center
-            )
-            Text(
-                "Total balance",
-                style = Typography.labelMedium,
-                color = TextSecondary
-            )
-            Spacer(modifier = Modifier.height(24.dp))
 
             val sorted = remember(sources) { sources.sortedByDescending { it.balance } }
             val fractions = remember(sorted, total) {
                 sorted.map { (it.balance / total).toFloat() }
             }
 
-            // Gap angle between segments (in degrees)
             val gapAngle = 8f
 
             Box(
-                modifier = Modifier.size(200.dp),
+                modifier = Modifier
+                    .size(200.dp)
+                    // pointerInput xử lý bắt tọa độ chạm tương tác phân vùng biểu đồ tròn
+                    .pointerInput(sorted, total) {
+                        detectTapGestures { offset ->
+                            val centerX = size.width / 2f
+                            val centerY = size.height / 2f
+                            val deltaX = offset.x - centerX
+                            val deltaY = offset.y - centerY
+                            val distance = sqrt(deltaX * deltaX + deltaY * deltaY)
+
+                            val outerRadius = size.width / 2f
+                            val strokeWidthPx = 24.dp.toPx()
+                            val innerRadius = outerRadius - strokeWidthPx
+
+                            // Kiểm tra xem vị trí click có nằm trên vành của biểu đồ tròn không
+                            if (distance in innerRadius..outerRadius) {
+                                var angle = Math.toDegrees(atan2(deltaY.toDouble(), deltaX.toDouble())).toFloat()
+                                if (angle < 0) angle += 360f
+
+                                // Đổi hệ trục tọa độ khớp với điểm vẽ xuất phát -90 độ (đỉnh trên cùng)
+                                var shiftedAngle = angle + 90f
+                                if (shiftedAngle >= 360f) shiftedAngle -= 360f
+
+                                var currentAngle = 0f
+                                var clickedIndex = -1
+
+                                for (i in sorted.indices) {
+                                    val sweepAngle = fractions[i] * 360f
+                                    if (shiftedAngle >= currentAngle && shiftedAngle < currentAngle + sweepAngle) {
+                                        clickedIndex = i
+                                        break
+                                    }
+                                    currentAngle += sweepAngle
+                                }
+                                // Click lại vào cung đang chọn thì hủy hover, trả về mặc định
+                                selectedIndex = if (selectedIndex == clickedIndex) -1 else clickedIndex
+                            } else {
+                                selectedIndex = -1
+                            }
+                        }
+                    },
                 contentAlignment = Alignment.Center
             ) {
                 Canvas(modifier = Modifier.fillMaxSize()) {
@@ -408,30 +441,34 @@ private fun CircularBlendChart(
                     val center = Offset(size.width / 2f, size.height / 2f)
                     val colors = sorted.map { colorForType(it.type) }
 
-                    var currentAngle = -90f // Start from top
+                    var currentAngle = -90f
 
                     sorted.forEachIndexed { index, source ->
                         val sweepAngle = fractions[index] * 360f - gapAngle
+                        val isSelected = selectedIndex == index
+                        val hasSelection = selectedIndex != -1
+
+                        // Phân vùng không được chọn sẽ mờ đi (alpha = 0.2f), phân vùng được chọn giữ nguyên 1.0f
+                        val alpha = if (hasSelection && !isSelected) 0.2f else 1f
+                        // Phân vùng được chọn nhô dày lên nổi bật hơn (+6.dp)
+                        val animatedStrokeWidth = if (isSelected) strokeWidth + 6.dp.toPx() else strokeWidth
 
                         if (sweepAngle > 0) {
-                            // Draw the arc segment
                             drawArc(
                                 color = colors[index],
                                 startAngle = currentAngle,
                                 sweepAngle = sweepAngle,
                                 useCenter = false,
                                 style = Stroke(
-                                    width = strokeWidth,
+                                    width = animatedStrokeWidth,
                                     cap = StrokeCap.Round
-                                )
+                                ),
+                                alpha = alpha
                             )
                         }
-
-                        // Move to next segment position
                         currentAngle += fractions[index] * 360f
                     }
 
-                    // Optional: Draw inner circle for glassy effect
                     drawCircle(
                         brush = Brush.radialGradient(
                             colors = listOf(BackgroundColorForBlendCore, Color.Transparent),
@@ -443,21 +480,47 @@ private fun CircularBlendChart(
                     )
                 }
 
-                // Center content
+                // Nội dung text ở tâm vòng tròn cập nhật động theo trạng thái tương tác
                 Column(
-                    horizontalAlignment = Alignment.CenterHorizontally
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.padding(16.dp)
                 ) {
-                    Text(
-                        text = fmt.format(total),
-                        style = Typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = TextPrimary
-                    )
-                    Text(
-                        text = "Total balance",
-                        style = Typography.labelMedium,
-                        color = TextSecondary
-                    )
+                    if (selectedIndex != -1) {
+                        val selectedSource = sorted[selectedIndex]
+                        Text(
+                            text = "${(fractions[selectedIndex] * 100).toInt()}%",
+                            style = Typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = colorForType(selectedSource.type),
+                            textAlign = TextAlign.Center
+                        )
+                        Text(
+                            text = selectedSource.name,
+                            style = Typography.labelMedium,
+                            color = TextSecondary,
+                            textAlign = TextAlign.Center,
+                            maxLines = 1
+                        )
+                        Text(
+                            text = "${fmt.format(selectedSource.balance)} VND",
+                            style = Typography.labelSmall,
+                            color = TextPrimary,
+                            textAlign = TextAlign.Center,
+                            maxLines = 1
+                        )
+                    } else {
+                        Text(
+                            text = fmt.format(total),
+                            style = Typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimary
+                        )
+                        Text(
+                            text = "Total balance",
+                            style = Typography.labelMedium,
+                            color = TextSecondary
+                        )
+                    }
                 }
             }
         }
@@ -519,11 +582,6 @@ private fun BlendChartBreakdown(
                             fontWeight = FontWeight.SemiBold,
                             color = TextPrimary,
                             maxLines = 1
-                        )
-                        Text(
-                            "$pct%",
-                            style = Typography.labelMedium,
-                            color = TextSecondary
                         )
                     }
                 }

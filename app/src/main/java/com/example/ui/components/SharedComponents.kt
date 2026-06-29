@@ -1,5 +1,14 @@
 package com.example.ui.components
 
+import androidx.compose.ui.text.PlatformTextStyle
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.BaselineShift
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.unit.sp
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
@@ -78,31 +87,115 @@ fun TopAppBar(title: String) {
     }
 }
 
-@Composable
-fun BalanceSection(title: String, value: String, color: Color = TextPrimary) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = title,
-                style = Typography.labelMedium,
-                color = TextSecondary
+// Hàm format tiền tệ với superscript
+fun formatCurrencyWithSuperscript(
+    amount: String,
+    currency: String = "VND",
+    amountSize: TextUnit = 32.sp,
+    currencySize: TextUnit = 16.sp
+): AnnotatedString {
+    return buildAnnotatedString {
+        withStyle(
+            style = SpanStyle(
+                fontSize = amountSize,
+                fontWeight = FontWeight.Bold,
+                color = TextPrimary
             )
+        ) {
+            append(amount)
         }
-        Spacer(modifier = Modifier.height(8.dp))
-        Row(verticalAlignment = Alignment.Bottom) {
-            Text(
-                text = "VND ",
-                style = Typography.displayMedium,
-                color = TextSecondary
+        withStyle(
+            style = SpanStyle(
+                fontSize = currencySize,
+                fontWeight = FontWeight.Medium,
+                color = TextPrimary,
+                baselineShift = BaselineShift.Superscript
             )
-            Text(
-                text = value,
-                style = Typography.displayLarge,
-                color = color
-            )
+        ) {
+            append(" $currency")
         }
     }
 }
+
+@Composable
+fun CurrencyText(
+    amount: String,
+    currency: String = "VND",
+    amountSize: TextUnit = 32.sp,
+    currencySize: TextUnit = 16.sp,
+    color: Color = TextPrimary,
+    modifier: Modifier = Modifier
+) {
+    Text(
+        text = buildAnnotatedString {
+            withStyle(
+                style = SpanStyle(
+                    fontSize = amountSize,
+                    fontWeight = FontWeight.Bold,
+                    color = color
+                )
+            ) {
+                append(amount)
+            }
+            withStyle(
+                style = SpanStyle(
+                    fontSize = currencySize,
+                    fontWeight = FontWeight.Medium,
+                    color = color,
+                    baselineShift = BaselineShift.Superscript
+                )
+            ) {
+                append(" $currency")
+            }
+        },
+        modifier = modifier
+    )
+}
+
+
+@Composable
+fun BalanceSection(
+    title: String,
+    value: String
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = title,
+            style = Typography.bodyMedium,
+            color = TextSecondary
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+
+        // Hiển thị số tiền với VND superscript
+        Text(
+            text = buildAnnotatedString {
+                withStyle(
+                    style = SpanStyle(
+                        fontSize = 48.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TextPrimary
+                    )
+                ) {
+                    append(value)
+                }
+                withStyle(
+                    style = SpanStyle(
+                        fontSize = 24.sp, // Nhỏ hơn
+                        fontWeight = FontWeight.Medium,
+                        color = TextPrimary,
+                        baselineShift = BaselineShift.Superscript // 👈 Đẩy lên trên
+                    )
+                ) {
+                    append(" VND")
+                }
+            },
+            style = Typography.headlineLarge // Style nền để giữ baseline
+        )
+    }
+}
+
 
 @Composable
 fun ChartSection(mainColor: Color) {
