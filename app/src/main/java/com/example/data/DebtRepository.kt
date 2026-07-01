@@ -6,7 +6,8 @@ import java.util.Calendar
 class DebtRepository(
     private val debtDao: DebtDao,
     private val txDao: DebtTransactionDao,
-    private val transactionDao: TransactionDao
+    private val transactionDao: TransactionDao,
+    private val debtPersonDao: DebtPersonDao
 ) {
 
     fun getAllDebtsWithPerson(): Flow<List<DebtWithPerson>> = debtDao.getAllDebtsWithPerson()
@@ -185,6 +186,12 @@ class DebtRepository(
         } catch (e: Exception) {
             Result.failure(e)
         }
+    }
+
+    suspend fun clearAllDebtData() {
+        txDao.deleteAllTransactions()
+        debtDao.deleteAllDebts()
+        debtPersonDao.deleteAllPersons()
     }
 
     // ── Internal helpers ──────────────────────────────────────────────────────

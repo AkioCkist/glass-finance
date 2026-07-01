@@ -29,4 +29,7 @@ interface DebtPersonDao {
 
     @Query("SELECT COUNT(*) > 0 FROM debt_persons WHERE name = :name AND id != :excludeId")
     suspend fun nameExists(name: String, excludeId: Long = -1L): Boolean
+
+    @Query("DELETE FROM debt_persons")
+    suspend fun deleteAllPersons()
 }

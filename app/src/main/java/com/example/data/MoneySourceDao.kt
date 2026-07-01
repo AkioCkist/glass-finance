@@ -22,4 +22,7 @@ interface MoneySourceDao {
 
     @Query("UPDATE money_sources SET balance = :newBalance WHERE id = :id")
     suspend fun updateMoneySourceBalance(id: Long, newBalance: Double)
+
+    @Query("DELETE FROM money_sources")
+    suspend fun deleteAllMoneySources()
 }

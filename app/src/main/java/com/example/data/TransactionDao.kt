@@ -12,4 +12,7 @@ interface TransactionDao {
 
     @Insert
     suspend fun insertTransaction(transaction: Transaction)
+
+    @Query("DELETE FROM transactions")
+    suspend fun deleteAllTransactions()
 }

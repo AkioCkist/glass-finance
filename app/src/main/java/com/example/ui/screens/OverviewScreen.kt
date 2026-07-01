@@ -15,7 +15,9 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -65,6 +67,7 @@ fun OverviewScreen(viewModel: FinanceViewModel) {
     var showMenu by remember { mutableStateOf(false) }
     var hideZeroBalance by remember { mutableStateOf(false) }
     var sortOrder by remember { mutableStateOf(SortOrder.NAME_ASC) }
+    var showClearDataDialog by remember { mutableStateOf(false) }
 
     // Filter và sort sources
     val filteredSources = remember(allSources, hideZeroBalance) {
@@ -266,6 +269,23 @@ fun OverviewScreen(viewModel: FinanceViewModel) {
                                 showMenu = false
                             }
                         )
+
+                        HorizontalDivider(color = GlassBorder, thickness = 1.dp)
+
+                        // Reset all app data
+                        DropdownMenuItem(
+                            text = {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Default.DeleteSweep, contentDescription = null, modifier = Modifier.size(20.dp))
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Text("Clear all data")
+                                }
+                            },
+                            onClick = {
+                                showMenu = false
+                                showClearDataDialog = true
+                            }
+                        )
                     }
                 }
             }
@@ -377,6 +397,31 @@ fun OverviewScreen(viewModel: FinanceViewModel) {
                     }
                 }
             }
+        }
+
+        if (showClearDataDialog) {
+            AlertDialog(
+                onDismissRequest = { showClearDataDialog = false },
+                title = { Text("Clear all data?") },
+                text = {
+                    Text("This will delete all transactions, money sources, and debts. App data will be reset like a fresh install.")
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            viewModel.resetAllData()
+                            showClearDataDialog = false
+                        }
+                    ) {
+                        Text("Clear")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showClearDataDialog = false }) {
+                        Text("Cancel")
+                    }
+                }
+            )
         }
     }
 }

@@ -41,6 +41,9 @@ interface DebtDao {
     @Query("SELECT * FROM debts WHERE id = :id")
     suspend fun getDebtById(id: Long): Debt?
 
+    @Query("DELETE FROM debts")
+    suspend fun deleteAllDebts()
+
     /** Sum of all INCREASE transactions for a debt. Returns 0 if none. */
     @Query(
         """

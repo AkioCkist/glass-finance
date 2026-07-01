@@ -42,35 +42,7 @@ class FinanceViewModel(
     // Seed default money sources on first launch
     init {
         viewModelScope.launch {
-            val existing = moneySourceDao.getAllMoneySourcesOnce()
-            if (existing.isEmpty()) {
-                val defaults = listOf(
-                    MoneySource(type = MoneySourceType.CASH, name = "Cash", balance = 0.0),
-                    MoneySource(
-                        type = MoneySourceType.CHECKING,
-                        name = "Bank Account",
-                        balance = 0.0
-                    ),
-                    MoneySource(
-                        type = MoneySourceType.SAVINGS,
-                        name = "Savings Account",
-                        balance = 0.0
-                    ),
-                    MoneySource(type = MoneySourceType.E_WALLET, name = "E-Wallet", balance = 0.0),
-                    MoneySource(
-                        type = MoneySourceType.CREDIT_CARD,
-                        name = "Credit Card",
-                        balance = 0.0
-                    ),
-                    MoneySource(
-                        type = MoneySourceType.INVESTMENT,
-                        name = "Investment",
-                        balance = 0.0
-                    ),
-                    MoneySource(type = MoneySourceType.OTHER, name = "Other", balance = 0.0)
-                )
-                defaults.forEach { moneySourceDao.insertMoneySource(it) }
-            }
+            seedDefaultMoneySourcesIfEmpty()
         }
     }
 
@@ -314,6 +286,53 @@ class FinanceViewModel(
             } catch (e: Exception) {
                 e.printStackTrace()
             }
+        }
+    }
+
+    fun resetAllData() {
+        viewModelScope.launch {
+            try {
+                debtRepository.clearAllDebtData()
+                transactionDao.deleteAllTransactions()
+                moneySourceDao.deleteAllMoneySources()
+                seedDefaultMoneySourcesIfEmpty()
+                showToast(getApplication(), "All data has been reset")
+            } catch (e: Exception) {
+                e.printStackTrace()
+                showToast(getApplication(), "Failed to reset data: ${e.message}")
+            }
+        }
+    }
+
+    private suspend fun seedDefaultMoneySourcesIfEmpty() {
+        val existing = moneySourceDao.getAllMoneySourcesOnce()
+        if (existing.isEmpty()) {
+            val defaults = listOf(
+                MoneySource(type = MoneySourceType.CASH, name = "Cash", balance = 0.0),
+                MoneySource(
+                    type = MoneySourceType.CHECKING,
+                    name = "Bank Account",
+                    balance = 0.0
+                ),
+                MoneySource(
+                    type = MoneySourceType.SAVINGS,
+                    name = "Savings Account",
+                    balance = 0.0
+                ),
+                MoneySource(type = MoneySourceType.E_WALLET, name = "E-Wallet", balance = 0.0),
+                MoneySource(
+                    type = MoneySourceType.CREDIT_CARD,
+                    name = "Credit Card",
+                    balance = 0.0
+                ),
+                MoneySource(
+                    type = MoneySourceType.INVESTMENT,
+                    name = "Investment",
+                    balance = 0.0
+                ),
+                MoneySource(type = MoneySourceType.OTHER, name = "Other", balance = 0.0)
+            )
+            defaults.forEach { moneySourceDao.insertMoneySource(it) }
         }
     }
 

@@ -72,7 +72,14 @@ fun FinanceTrackerApp(onContentReady: () -> Unit = {}) {
     val database = application.database
 
     // Debt repositories
-    val debtRepository = remember { DebtRepository(database.debtDao(), database.debtTransactionDao(), database.transactionDao()) }
+    val debtRepository = remember {
+        DebtRepository(
+            database.debtDao(),
+            database.debtTransactionDao(),
+            database.transactionDao(),
+            database.debtPersonDao()
+        )
+    }
 
     // Main finance VM
     val financeViewModel: FinanceViewModel = viewModel(
