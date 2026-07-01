@@ -19,6 +19,7 @@ import com.example.data.DebtDirection
 import com.example.data.DebtRepository
 import com.example.data.DebtStatus
 import com.example.data.MoneySourceType
+import com.example.data.SavingRepository
 import com.example.data.Transaction
 import com.example.data.TransactionDao
 import kotlinx.coroutines.flow.SharingStarted
@@ -36,7 +37,8 @@ class FinanceViewModel(
     application: Application,
     private val transactionDao: TransactionDao,
     private val moneySourceDao: MoneySourceDao,
-    private val debtRepository: DebtRepository
+    private val debtRepository: DebtRepository,
+    private val savingRepository: SavingRepository
 ) : AndroidViewModel(application) {
 
     // Seed default money sources on first launch
@@ -293,6 +295,7 @@ class FinanceViewModel(
         viewModelScope.launch {
             try {
                 debtRepository.clearAllDebtData()
+                savingRepository.clearAllSavingsData()
                 transactionDao.deleteAllTransactions()
                 moneySourceDao.deleteAllMoneySources()
                 seedDefaultMoneySourcesIfEmpty()
@@ -394,12 +397,19 @@ class FinanceViewModelFactory(
     private val application: Application,
     private val transactionDao: TransactionDao,
     private val moneySourceDao: MoneySourceDao,
-    private val debtRepository: DebtRepository
+    private val debtRepository: DebtRepository,
+    private val savingRepository: SavingRepository
 ) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(FinanceViewModel::class.java)) {
             @Suppress("UNCHECKED_CAST")
-            return FinanceViewModel(application, transactionDao, moneySourceDao, debtRepository) as T
+            return FinanceViewModel(
+                application,
+                transactionDao,
+                moneySourceDao,
+                debtRepository,
+                savingRepository
+            ) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")
     }

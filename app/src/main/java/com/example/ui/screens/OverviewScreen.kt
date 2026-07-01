@@ -58,7 +58,10 @@ enum class SortOrder {
 }
 
 @Composable
-fun OverviewScreen(viewModel: FinanceViewModel) {
+fun OverviewScreen(
+    viewModel: FinanceViewModel,
+    onNavigateToSavings: () -> Unit = {}
+) {
     val totalBalance by viewModel.totalBalance.collectAsState()
     val allSources by viewModel.moneySources.collectAsState()
     val debtSummary by viewModel.debtSummary.collectAsState()
@@ -267,6 +270,22 @@ fun OverviewScreen(viewModel: FinanceViewModel) {
                             onClick = {
                                 viewModel.exportCSV(sortedSources, totalBalance)
                                 showMenu = false
+                            }
+                        )
+
+                        HorizontalDivider(color = GlassBorder, thickness = 1.dp)
+
+                        DropdownMenuItem(
+                            text = {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Default.Savings, contentDescription = null, modifier = Modifier.size(20.dp))
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Text("Savings goals")
+                                }
+                            },
+                            onClick = {
+                                showMenu = false
+                                onNavigateToSavings()
                             }
                         )
 

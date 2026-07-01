@@ -372,14 +372,14 @@ fun FloatingBottomNav(
 ) {
     Box(
         modifier = Modifier
-            .width(239.dp)
+            .width(300.dp)
             .height(64.dp)
     ) {
         LiquidBottomTabs(
             selectedTabIndex = { currentRouteIndex },
             onTabSelected = { index -> onNavigate(index) },
             backdropState = backdropState,
-            tabsCount = 4,
+            tabsCount = 5,
             modifier = Modifier.fillMaxSize()
         ) {
             NavIcon(
@@ -401,6 +401,11 @@ fun FloatingBottomNav(
                 icon = Icons.Default.AccountBalanceWallet,
                 isActive = currentRouteIndex == 3,
                 onClick = { onNavigate(3) }
+            )
+            NavIcon(
+                icon = Icons.Default.Savings,
+                isActive = currentRouteIndex == 4,
+                onClick = { onNavigate(4) }
             )
         }
     }

@@ -32,6 +32,7 @@ import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.example.data.DebtPersonRepository
 import com.example.data.DebtRepository
+import com.example.data.SavingRepository
 import com.example.ui.components.FloatingBottomNav
 import com.example.ui.screens.*
 import com.example.ui.theme.*
@@ -80,6 +81,12 @@ fun FinanceTrackerApp(onContentReady: () -> Unit = {}) {
             database.debtPersonDao()
         )
     }
+    val savingRepository = remember {
+        SavingRepository(
+            database.savingGoalDao(),
+            database.savingTransactionDao()
+        )
+    }
 
     // Main finance VM
     val financeViewModel: FinanceViewModel = viewModel(
@@ -87,7 +94,8 @@ fun FinanceTrackerApp(onContentReady: () -> Unit = {}) {
             application = application,
             transactionDao = database.transactionDao(),
             moneySourceDao = database.moneySourceDao(),
-            debtRepository = debtRepository
+            debtRepository = debtRepository,
+            savingRepository = savingRepository
         )
     )
     val personRepository = remember { DebtPersonRepository(database.debtPersonDao()) }
@@ -99,12 +107,17 @@ fun FinanceTrackerApp(onContentReady: () -> Unit = {}) {
     val personViewModel: DebtPersonViewModel = viewModel(
         factory = DebtPersonViewModelFactory(personRepository)
     )
+    val savingListViewModel: SavingListViewModel = viewModel(
+        factory = SavingListViewModelFactory(savingRepository)
+    )
 
     // Collect persons for debt form
     val persons by personViewModel.uiState.collectAsState()
 
     // Sub-screens (debt detail, form, people) hide bottom nav
-    val isSubScreen = currentRoute.startsWith("debt/") && currentRoute != "debt/list"
+    val isSubScreen =
+        (currentRoute.startsWith("debt/") && currentRoute != "debt/list") ||
+                (currentRoute.startsWith("saving/") && currentRoute != "saving/list")
 
     fun getRouteIndex(route: String?): Int {
         return when {
@@ -112,6 +125,7 @@ fun FinanceTrackerApp(onContentReady: () -> Unit = {}) {
             route == "spend" -> 1
             route == "summary" -> 2
             route == "debt/list" -> 3
+            route == "saving/list" -> 4
             else -> 0
         }
     }
@@ -127,7 +141,7 @@ fun FinanceTrackerApp(onContentReady: () -> Unit = {}) {
         }
 
         // Pre-warm: visit every tab to force first-time composition + shader compilation
-        val tabs = listOf("spend", "summary", "debt/list")
+        val tabs = listOf("spend", "summary", "debt/list", "saving/list")
         for (route in tabs) {
             navController.navigate(route) {
                 popUpTo("overview") { saveState = false }
@@ -198,7 +212,12 @@ fun FinanceTrackerApp(onContentReady: () -> Unit = {}) {
                         fadeOut(animationSpec = tween(150, easing = FastOutSlowInEasing))
                     }
                 ) {
-                    composable("overview") { OverviewScreen(financeViewModel) }
+                    composable("overview") {
+                        OverviewScreen(
+                            viewModel = financeViewModel,
+                            onNavigateToSavings = { navController.navigate("saving/list") }
+                        )
+                    }
                     composable("spend") {
                         SpendScreen(
                             financeViewModel,
@@ -264,6 +283,51 @@ fun FinanceTrackerApp(onContentReady: () -> Unit = {}) {
                             onNavigateBack = { navController.popBackStack() }
                         )
                     }
+
+                    composable("saving/list") {
+                        SavingListScreen(
+                            viewModel = savingListViewModel,
+                            onNavigateBack = { navController.popBackStack() },
+                            onNavigateToDetail = { goalId -> navController.navigate("saving/detail/$goalId") },
+                            onNavigateToAdd = { navController.navigate("saving/add") }
+                        )
+                    }
+
+                    composable("saving/add") {
+                        SavingAddScreen(
+                            repository = savingRepository,
+                            onSaved = { navController.popBackStack() },
+                            onNavigateBack = { navController.popBackStack() }
+                        )
+                    }
+
+                    composable(
+                        route = "saving/detail/{goalId}",
+                        arguments = listOf(navArgument("goalId") { type = NavType.LongType })
+                    ) { backStackEntry ->
+                        val goalId = backStackEntry.arguments?.getLong("goalId") ?: return@composable
+                        val detailViewModel: SavingDetailViewModel = viewModel(
+                            factory = SavingDetailViewModelFactory(goalId, savingRepository)
+                        )
+                        SavingDetailScreen(
+                            viewModel = detailViewModel,
+                            onNavigateBack = { navController.popBackStack() },
+                            onNavigateToEdit = { id -> navController.navigate("saving/edit/$id") }
+                        )
+                    }
+
+                    composable(
+                        route = "saving/edit/{goalId}",
+                        arguments = listOf(navArgument("goalId") { type = NavType.LongType })
+                    ) { backStackEntry ->
+                        val goalId = backStackEntry.arguments?.getLong("goalId") ?: return@composable
+                        SavingEditScreen(
+                            goalId = goalId,
+                            repository = savingRepository,
+                            onSaved = { navController.popBackStack() },
+                            onNavigateBack = { navController.popBackStack() }
+                        )
+                    }
                 }
             }
         }
@@ -287,6 +351,7 @@ fun FinanceTrackerApp(onContentReady: () -> Unit = {}) {
                             1 -> "spend"
                             2 -> "summary"
                             3 -> "debt/list"
+                            4 -> "saving/list"
                             else -> "overview"
                         }
                         // Quan trọng: so sánh với navController.currentDestination?.route
@@ -433,5 +498,110 @@ fun DebtEditScreen(
                 personRepository.addPerson(name)
             }
         }
+    )
+}
+
+@Composable
+fun SavingAddScreen(
+    repository: SavingRepository,
+    onSaved: () -> Unit,
+    onNavigateBack: () -> Unit
+) {
+    var isLoading by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    val coroutineScope = rememberCoroutineScope()
+
+    SavingFormScreen(
+        isEdit = false,
+        initialTitle = "",
+        initialIcon = "🎯",
+        initialNote = "",
+        initialTargetAmount = "0",
+        initialInitialAmount = "0",
+        initialDeadline = null,
+        isLoading = isLoading,
+        error = error,
+        onSave = { title, icon, note, targetAmount, initialAmount, deadline ->
+            isLoading = true
+            coroutineScope.launch {
+                val result = repository.createGoal(
+                    title = title,
+                    icon = icon,
+                    note = note,
+                    targetAmount = targetAmount,
+                    initialAmount = initialAmount,
+                    deadline = deadline,
+                    createdDate = System.currentTimeMillis()
+                )
+                isLoading = false
+                if (result.isSuccess) {
+                    onSaved()
+                } else {
+                    error = result.exceptionOrNull()?.message ?: "Failed to create goal"
+                }
+            }
+        },
+        onNavigateBack = onNavigateBack
+    )
+}
+
+@Composable
+fun SavingEditScreen(
+    goalId: Long,
+    repository: SavingRepository,
+    onSaved: () -> Unit,
+    onNavigateBack: () -> Unit
+) {
+    var goal by remember { mutableStateOf<com.example.data.SavingGoal?>(null) }
+    var isLoading by remember { mutableStateOf(true) }
+    var isSaving by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    val coroutineScope = rememberCoroutineScope()
+
+    LaunchedEffect(goalId) {
+        isLoading = true
+        val result = repository.observeGoalWithTotals(goalId).firstOrNull()
+        goal = result?.goal
+        isLoading = false
+    }
+
+    val currentGoal = goal
+    if (isLoading || currentGoal == null) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator(color = TextPrimary)
+        }
+        return
+    }
+
+    SavingFormScreen(
+        isEdit = true,
+        initialTitle = currentGoal.title,
+        initialIcon = currentGoal.icon,
+        initialNote = currentGoal.note,
+        initialTargetAmount = currentGoal.targetAmount.toLong().toString(),
+        initialInitialAmount = "0",
+        initialDeadline = currentGoal.deadline,
+        isLoading = isSaving,
+        error = error,
+        onSave = { title, icon, note, targetAmount, _, deadline ->
+            isSaving = true
+            coroutineScope.launch {
+                val result = repository.updateGoal(
+                    goalId = goalId,
+                    title = title,
+                    icon = icon,
+                    note = note,
+                    targetAmount = targetAmount,
+                    deadline = deadline
+                )
+                isSaving = false
+                if (result.isSuccess) {
+                    onSaved()
+                } else {
+                    error = result.exceptionOrNull()?.message ?: "Failed to update goal"
+                }
+            }
+        },
+        onNavigateBack = onNavigateBack
     )
 }
